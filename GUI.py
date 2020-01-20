@@ -8,44 +8,144 @@
 
 #GPIO
 
+##########################
+##----USER SETTINGS----###
+##########################
+
+#Connection variables, change as required
+MQTT_server = ""
+MQTT_user = ""
+MQTT_password = ""
+#The MQTT topic where we find the authorisations
+MQTT_auth_topic = "TestTopic/auth"
+
+#The MQTT topic to publish requests
+MQTT_request_topic = "TestTopic/req"
+
+#Pin used for the door relay (BCM layout)
 RELAY_PIN = 21
 
+#Door ID - Type Str (can be anything. Ex: room number)
+DOOR_ID = "92"
+
+##########################
+##----END  SETTINGS----###
+##########################
+
+##########################
+
+#########IMPORTS##########
 try:
     import RPi.GPIO as GPIO
 except RuntimeError:
     print("Error importing RPi.GPIO!  This is probably because you need superuser privileges.  You can achieve this by using 'sudo' to run your script")
 
+import time
+
+#MQTT
+import paho.mqtt.client as mqtt #import the mqtt client
+
+#NFC
+from py532lib.i2c import *
+from py532lib.frame import *
+from py532lib.constants import *
+
+#PyQt5
+from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtCore import QThread, pyqtSignal, QTimer
+##########################
+
+#############
+#GPIO Setup##
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(RELAY_PIN, GPIO.OUT, initial=GPIO.HIGH)
 
-#NFC reading
-import serial
-import board
-import busio
-from digitalio import DigitalInOut
-#
-# NOTE: pick the import that matches the interface being used
-#
-from adafruit_pn532.i2c import PN532_I2C
+#NFC Setup###
+pn532 = Pn532_i2c()
+pn532.SAMconfigure()
+#############
 
-# I2C connection:
-i2c = busio.I2C(board.SCL, board.SDA)
+######THREADS######
+#MQTT Thread
+class MQTTThread(QThread):
+    signal_granted = pyqtSignal()
+    signal_denied = pyqtSignal()
+    signal_alive = pyqtSignal()
+    signal_dead = pyqtSignal()
 
-# With I2C, we recommend connecting RSTPD_N (reset) to a digital pin for manual
-# harware reset
-reset_pin = DigitalInOut(board.D6)
-# On Raspberry Pi, you must also connect a pin to P32 "H_Request" for hardware
-# wakeup! this means we don't need to do the I2C clock-stretch thing
-req_pin = DigitalInOut(board.D12)
-pn532 = PN532_I2C(i2c, debug=False, reset=reset_pin, req=req_pin)
-###
+    def __init__(self):
+        QThread.__init__(self)
 
-from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtCore import QThread, pyqtSignal, QTimer
+    def publish(self, uid):
+        #We publish the output string
+        print("Publishing message to topic", MQTT_request_topic)
+        self.client.publish(MQTT_request_topic, uid + ":" + DOOR_ID)
+        print("MQTT request sent...")
 
+    #Outputs log messages and call-backs in the console
+    def on_log(self, mqttc, obj, level, string):
+        print(string)
+
+    #Code to execute when any MQTT message is received
+    def on_message(self, client, userdata, message):
+        #Display the received message in the console
+        print("message received!")
+        print("message received " ,str(message.payload.decode("utf-8")))
+        print("message topic=",message.topic)
+        if(str(message.payload.decode("utf-8")) == ("granted:" + DOOR_ID)):
+            print("Acces Granted via MQTT!")
+            self.signal_granted.emit()
+        if(str(message.payload.decode("utf-8")) == ("denied:" + DOOR_ID)):
+            print("Acces Denied via MQTT!")
+            self.signal_denied.emit()
+
+    # run method gets called when we start the thread
+    def run(self):
+
+       print("Thread!")
+       #Start of the MQTT subscribing
+       ########################################
+       #We wait for the system to come up
+       sleep(2)
+       self.signal_dead.emit()
+       #MQTT address
+       broker_address=MQTT_server
+       print("creating new MQTT instance")
+       self.client = mqtt.Client("P1") #create new instance
+       self.client.on_message=self.on_message #attach function to callback
+       self.client.on_log=self.on_log #attach logging to log callback
+
+       # Auth
+       self.client.username_pw_set(username=MQTT_user,password=MQTT_password)
+
+       # now we connect
+       print("connecting to MQTT broker")
+       self.client.connect(broker_address) #connect to broker
+
+       #Subscribe to all the weather topics we need
+       print("Subscribing to topic",MQTT_auth_topic)
+       self.client.subscribe(MQTT_auth_topic)
+
+       #Tell the MQTT client to subscribe forever
+       print("MQTT alive!")
+       self.signal_alive.emit()
+       self.client.loop_forever()
+       print("MQTT dead!")
+       self.signal_dead.emit()
+
+#NFC Thread
 class NFCThread(QThread):
     signal_granted = pyqtSignal()
     signal_denied = pyqtSignal()
+    signal_acces_req = pyqtSignal(str, name='uid')
+
+    def mqtt_alive(self):
+        print("MQTT alive received!")
+        self.MQTT_started = True
+
+    def mqtt_dead(self):
+        print("MQTT dead received!")
+        self.MQTT_started = False
 
     def __init__(self):
         QThread.__init__(self)
@@ -55,17 +155,11 @@ class NFCThread(QThread):
     def run(self):
         
        print("Thread!")
-       ic, ver, rev, support = pn532.get_firmware_version()
-       print('Found PN532 with firmware version: {0}.{1}'.format(ver, rev))
- 
-       # Configure PN532 to communicate with MiFare cards
-       pn532.SAM_configuration()
- 
-       print('Waiting for RFID/NFC card...')
+       mqtt_thread = MQTTThread()
+
        while True:
           # Check if a card is available to read
-          uid = pn532.read_passive_target(timeout=0.5)
-          print('.', end="")
+          uid = pn532.read_mifare().get_data()
           # Try again if no card is available.
           if uid is None:
              continue
@@ -75,41 +169,54 @@ class NFCThread(QThread):
           for block in card:  
               card_id += str(block)
           print("Checking card...")
-          saved_uid  = open("cards.conf", "r")
-    
-          card_ok = False
-          has_cards = False
-
-          if("---new card---" in saved_uid.read()):
-              has_cards = True
-              print("Loaded saved cards!") 
+          print(card_id)
+          if(self.MQTT_started == True):
+              #We publish the output string
+              self.signal_acces_req.emit(card_id)
+              print("MQTT request signal sent!")
+              sleep(4)
           else:
-              print("No saved cards!")
+              saved_uid  = open("cards.conf", "r")
+    
+              card_ok = False
+              has_cards = False
 
-          saved_uid.close()
-          saved_uid  = open("cards.conf", "r")
-
-          for line in saved_uid:
-              print(line)
-              if("---new card---" in line):
-                  if(has_cards == True):
-                     if(card_id in line):
-                         card_ok = True
-
-                         print("Acces Granted!")
-                         self.signal_granted.emit()
-                         print("Signal emitted!")
-                     if(card_ok == False):
-                          print("Acces Denied")
-                          self.signal_denied.emit()
-                          print("Signal emitted!")
+              if("---new card---" in saved_uid.read()):
+                  has_cards = True
+                  print("Loaded saved cards!") 
               else:
-                  print("Checking next line...")
+                  print("No saved cards!")
 
-          saved_uid.close()
+              saved_uid.close()
+              saved_uid  = open("cards.conf", "r")
 
+              for line in saved_uid:
+                  print(line)
+                  if("---new card---" in line):
+                      if(has_cards == True):
+                         if(card_id in line):
+                             card_ok = True
+
+                             print("Acces Granted!")
+                             self.signal_granted.emit()
+                             print("Signal emitted!")
+                             sleep(5)
+                         if(card_ok == False):
+                              print("Acces Denied")
+                              self.signal_denied.emit()
+                              print("Signal emitted!")
+                  else:
+                      print("Checking next line...")
+
+              saved_uid.close()
+######
+
+######
+#MainWindow#
 class Ui_MainWindow(object):
 
+    #MQTT signal
+    signal_acces_req = pyqtSignal(str, name='uid')
 
     #Definition of an empty code
     code = ""
@@ -238,24 +345,30 @@ class Ui_MainWindow(object):
     def on_click_val(self):
         if(self.code != ""):
         
-            print("Checking code...")
-            saved_code  = open("codes.conf", "r")
+              print("Checking code...")
+            #if(self.MQTT_started == True):
+              #We publish the output string
+              #self.signal_acces_req.emit(self.code)
+              #print("MQTT request signal sent!")
+              #sleep(4)
+            #else:
+              saved_code  = open("codes.conf", "r")
     
-            code_ok = False
-            has_codes = False
+              code_ok = False
+              has_codes = False
 
-            if("---new code---" in saved_code.read()):
-              has_codes = True
-              print("Loaded saved codes!") 
-            else:
-              print("No saved codes!")
+              if("---new code---" in saved_code.read()):
+                has_codes = True
+                print("Loaded saved codes!") 
+              else:
+                print("No saved codes!")
 
-            saved_code.close()
-            saved_code  = open("codes.conf", "r")
+              saved_code.close()
+              saved_code  = open("codes.conf", "r")
 
-            for line in saved_code:
-              print(line)
-              if("---new code---" in line):
+              for line in saved_code:
+               print(line)
+               if("---new code---" in line):
                   if(has_codes == True):
                      if(self.code in line):
                           code_ok = True
@@ -273,11 +386,11 @@ class Ui_MainWindow(object):
                           self.timer = QTimer()
                           self.timer.timeout.connect(self.close_door)
                           self.timer.start(5000)
-              else:
+               else:
                   print("Checking next line...")
 
-            saved_code.close()
-            self.code = ""
+              saved_code.close()
+              self.code = ""
         else:
             self.label_statut_porte.setText("Entrez code!")
             self.timer = QTimer()
@@ -380,13 +493,31 @@ def main():
     ui = Ui_MainWindow()
     ui.setupUi(MainWindow)
     MainWindow.show()
+    #MQTT define
+    mqtt_thread = MQTTThread()
     #NFC
     nfc_thread = NFCThread()
     nfc_thread.start()  # Finally starts the thread
+
+    #MainWindow
+    #ui.signal_acces_req.connect(mqtt_thread.publish)
+
     #NFC
     # Connect the signal from the thread to the finished method
     nfc_thread.signal_granted.connect(ui.acces_granted)
     nfc_thread.signal_denied.connect(ui.acces_denied)
+    nfc_thread.signal_acces_req.connect(mqtt_thread.publish)
+    
+    #MQTT
+    #mqtt_thread = MQTTThread()
+    mqtt_thread.start()  # Finally starts the thread
+    #MQTT
+    # Connect the signal from the thread to the finished method
+    mqtt_thread.signal_granted.connect(ui.acces_granted)
+    mqtt_thread.signal_denied.connect(ui.acces_denied)
+    mqtt_thread.signal_alive.connect(nfc_thread.mqtt_alive)
+    mqtt_thread.signal_dead.connect(nfc_thread.mqtt_dead)
+
     sys.exit(app.exec_())
     GPIO.cleanup()
 

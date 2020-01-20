@@ -4,6 +4,7 @@ stretching support), SPI, or UART. SPI is best, it uses the most pins but
 is the most reliable and universally supported.
 After initialization, try waving various 13.56MHz RFID cards over it!
 """
+'''
 import serial
 import board
 import busio
@@ -46,10 +47,20 @@ print('Found PN532 with firmware version: {0}.{1}'.format(ver, rev))
 pn532.SAM_configuration()
  
 print('Waiting for RFID/NFC card...')
+'''
+
+from py532lib.i2c import *
+from py532lib.frame import *
+from py532lib.constants import *
+ 
+pn532 = Pn532_i2c()
+pn532.SAMconfigure()
+
 while True:
     # Check if a card is available to read
-    uid = pn532.read_passive_target(timeout=0.5)
-    print('.', end="")
+    #uid = pn532.read_passive_target(timeout=0.5)
+    #print('.', end="")
+    uid = pn532.read_mifare().get_data()
     # Try again if no card is available.
     if uid is None:
         continue
