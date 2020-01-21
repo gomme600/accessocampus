@@ -83,7 +83,7 @@ class MQTTThread(QThread):
     def publish(self, uid, code):
         #We publish the output string
         print("Publishing message to topic", MQTT_request_topic)
-        mqtt_payload = {"door_id": 0, "auth_type": 0, "nfc_uid": uid, "passcode": code, "image": 0}
+        mqtt_payload = {"door_id": DOOR_ID, "auth_type": 0, "nfc_uid": uid, "passcode": code, "image": 0}
         self.client.publish(MQTT_request_topic, json.dumps(mqtt_payload)) 
         print("MQTT request sent...")
 
@@ -97,12 +97,23 @@ class MQTTThread(QThread):
         print("message received!")
         print("message received " ,str(message.payload.decode("utf-8")))
         print("message topic=",message.topic)
-        if(str(message.payload.decode("utf-8")) == ("granted:" + DOOR_ID)):
-            print("Acces Granted via MQTT!")
-            self.signal_granted.emit()
-        if(str(message.payload.decode("utf-8")) == ("denied:" + DOOR_ID)):
-            print("Acces Denied via MQTT!")
-            self.signal_denied.emit()
+
+        #We convert the loop JSON string to a python dictionary
+        inData = json.loads(str(message.payload.decode("utf-8")))
+        print("We loaded the JSON data!")
+        #We load the data from the dictionary using the keys
+
+        if ( ("door_id" in inData) & ("command" in inData) ):
+
+            if( (str(inData["door_id"]) == DOOR_ID) | (str(inData["door_id"]) == "ALL") ):
+
+                if(str(inData["command"]) == "granted"):
+                    print("Acces Granted via MQTT!")
+                    self.signal_granted.emit()
+
+                if(str(inData["command"]) == "denied"):
+                    print("Acces Denied via MQTT!")
+                    self.signal_denied.emit()
 
     # run method gets called when we start the thread
     def run(self):
@@ -111,7 +122,7 @@ class MQTTThread(QThread):
        #Start of the MQTT subscribing
        ########################################
        #We wait for the system to come up
-       sleep(2)
+       #sleep(2)
        self.signal_dead.emit()
        #MQTT address
        broker_address=MQTT_server
@@ -180,7 +191,7 @@ class NFCThread(QThread):
               #We publish the output string
               #self.signal_acces_req.emit(card_id)
               self.signal_code_request.emit(card_id)
-              print("MQTT request signal sent!")
+              print("Code request signal sent!")
               sleep(4)
           else:
               saved_uid  = open("cards.conf", "r")
@@ -222,15 +233,27 @@ class NFCThread(QThread):
 
 #MainWindow#
 class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
+
+    #MQTT signal
+    signal_acces_req_done = QtCore.pyqtSignal(str, str, name='uid')
+
     def __init__(self):
         QtWidgets.QMainWindow.__init__(self)
         Ui_MainWindow.__init__(self)
         self.setupUi(self)
         
+        #MQTT signal
+        #signal_acces_req_done = QtCore.pyqtSignal(str, str, name='uid')
+       
+
+        #Definition of an empty code
+        self.code = ""
+        
         self.toolBox.setItemEnabled(1,False)
 
-        Ui_MainWindow.showFullScreen()
+        #self.MainWindow.showFullScreen()
 
+        self.pushButton_dig_val.clicked.connect(self.on_click_val)
         self.pushButton_dig_val_2.clicked.connect(self.on_click_ann)
         self.pushButton_dig_0.clicked.connect(self.on_click_0)
         self.pushButton_dig_1.clicked.connect(self.on_click_1)
@@ -243,8 +266,8 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pushButton_dig_8.clicked.connect(self.on_click_8)
         self.pushButton_dig_9.clicked.connect(self.on_click_9)
 
-        self.mqtt_thread = MQTTThread
-        #self.signal_acces_req_done.connect(self.on_click_0)
+        #self.mqtt_thread = MQTTThread
+        #self.signal_acces_req_done.connect(mqtt_thread.publish)
 
     #@pyqtSlot()
     def on_click_val(self):
@@ -255,9 +278,10 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             if(True):
               #We publish the output string
               #self.signal_acces_req_done.emit(self.mqtt_thread.publish(self.uid, self.code))
-              self.signal_acces_req_done.emit()
+              self.signal_acces_req_done.emit(self.nfc_uid, self.code)
+              self.code = ""
+              self.label_statut_porte.setText("Demande en cours...")
               print("MQTT request signal sent!")
-              sleep(4)
             else:
               saved_code  = open("codes.conf", "r")
     
@@ -396,9 +420,10 @@ def main():
     import sys
     app = QtWidgets.QApplication(sys.argv)
     MainWindow = MyWindow()
-    ui = Ui_MainWindow()
-    ui.setupUi(MainWindow)
-    MainWindow.show()
+    #ui = Ui_MainWindow()
+    #ui.setupUi(MainWindow)
+    MainWindow.showFullScreen()
+    #MainWindow.show()
     #MQTT define
     mqtt_thread = MQTTThread()
     #NFC
@@ -408,20 +433,23 @@ def main():
 
     #NFC
     # Connect the signal from the thread to the finished method
-    nfc_thread.signal_granted.connect(ui.acces_granted)
-    nfc_thread.signal_denied.connect(ui.acces_denied)
-    nfc_thread.signal_acces_req.connect(ui.change_tab_code)
-    nfc_thread.signal_code_request.connect(ui.change_tab_code)
+    nfc_thread.signal_granted.connect(MainWindow.acces_granted)
+    nfc_thread.signal_denied.connect(MainWindow.acces_denied)
+    nfc_thread.signal_acces_req.connect(MainWindow.change_tab_code)
+    nfc_thread.signal_code_request.connect(MainWindow.change_tab_code)
     
     #MQTT
     #mqtt_thread = MQTTThread()
     mqtt_thread.start()  # Finally starts the thread
     #MQTT
     # Connect the signal from the thread to the finished method
-    mqtt_thread.signal_granted.connect(ui.acces_granted)
-    mqtt_thread.signal_denied.connect(ui.acces_denied)
+    mqtt_thread.signal_granted.connect(MainWindow.acces_granted)
+    mqtt_thread.signal_denied.connect(MainWindow.acces_denied)
     mqtt_thread.signal_alive.connect(nfc_thread.mqtt_alive)
     mqtt_thread.signal_dead.connect(nfc_thread.mqtt_dead)
+
+    #MainWindow
+    MainWindow.signal_acces_req_done.connect(mqtt_thread.publish)
 
     sys.exit(app.exec_())
     GPIO.cleanup()
