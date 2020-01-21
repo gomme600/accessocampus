@@ -15,8 +15,11 @@ MQTT_request_topic = "TestTopic/req"
 #Pin used for the door relay (BCM layout)
 RELAY_PIN = 21
 
-#Door ID - Type Str (can be anything. Ex: room number)
+#Door ID - Type STR (can be anything. Ex: room number)
 DOOR_ID = "92"
+
+#MQTT timeout interval (in seconds)
+MQTT_TIMEOUT = 5
 
 ##########################
 ##----END  SETTINGS----###
@@ -76,16 +79,31 @@ class MQTTThread(QThread):
     signal_denied = pyqtSignal()
     signal_alive = pyqtSignal()
     signal_dead = pyqtSignal()
+    signal_local_check = pyqtSignal(str, str, name='uid')
+
+    #Timeout timer
+    mqtt_waiting_timer = QTimer()
 
     def __init__(self):
         QThread.__init__(self)
 
+    def timeout(self):
+        print("MQTT timed out!")
+        self.signal_local_check.emit(self.uid, self.code)
+        self.mqtt_waiting_timer.stop()
+
     def publish(self, uid, code):
+        self.uid = uid
+        self.code = code
         #We publish the output string
         print("Publishing message to topic", MQTT_request_topic)
-        mqtt_payload = {"door_id": DOOR_ID, "auth_type": 0, "nfc_uid": uid, "passcode": code, "image": 0}
+        mqtt_payload = {"door_id": DOOR_ID, "auth_type": 0, "nfc_uid": self.uid, "passcode": self.code, "image": 0}
         self.client.publish(MQTT_request_topic, json.dumps(mqtt_payload)) 
         print("MQTT request sent...")
+        self.mqtt_waiting = True
+        self.mqtt_waiting_timer.timeout.connect(self.timeout)
+        self.mqtt_waiting_timer.start(MQTT_TIMEOUT*1000)
+
 
     #Outputs log messages and call-backs in the console
     def on_log(self, mqttc, obj, level, string):
@@ -107,6 +125,10 @@ class MQTTThread(QThread):
 
             if( (str(inData["door_id"]) == DOOR_ID) | (str(inData["door_id"]) == "ALL") ):
 
+                #Stop the timeout timer as we received a response (if it was running)
+                self.mqtt_waiting_timer.stop()
+                self.mqtt_waiting = False
+                
                 if(str(inData["command"]) == "granted"):
                     print("Acces Granted via MQTT!")
                     self.signal_granted.emit()
@@ -172,7 +194,6 @@ class NFCThread(QThread):
     def run(self):
         
        print("Thread!")
-       mqtt_thread = MQTTThread()
 
        while True:
           # Check if a card is available to read
@@ -187,46 +208,10 @@ class NFCThread(QThread):
               card_id += str(block)
           print("Checking card...")
           print(card_id)
-          if(self.MQTT_started == True):
-              #We publish the output string
-              #self.signal_acces_req.emit(card_id)
-              self.signal_code_request.emit(card_id)
-              print("Code request signal sent!")
-              sleep(4)
-          else:
-              saved_uid  = open("cards.conf", "r")
-    
-              card_ok = False
-              has_cards = False
-
-              if("---new card---" in saved_uid.read()):
-                  has_cards = True
-                  print("Loaded saved cards!") 
-              else:
-                  print("No saved cards!")
-
-              saved_uid.close()
-              saved_uid  = open("cards.conf", "r")
-
-              for line in saved_uid:
-                  print(line)
-                  if("---new card---" in line):
-                      if(has_cards == True):
-                         if(card_id in line):
-                             card_ok = True
-
-                             print("Acces Granted!")
-                             self.signal_granted.emit()
-                             print("Signal emitted!")
-                             sleep(5)
-                         if(card_ok == False):
-                              print("Acces Denied")
-                              self.signal_denied.emit()
-                              print("Signal emitted!")
-                  else:
-                      print("Checking next line...")
-
-              saved_uid.close()
+          #We publish the output string
+          self.signal_code_request.emit(card_id)
+          print("Code request signal sent!")
+          sleep(4)
 ######
 
 ######
@@ -273,61 +258,12 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def on_click_val(self):
         self.toolBox.setCurrentIndex(0)
         if(self.code != ""):
-        
+
             print("Checking code...")
-            if(True):
-              #We publish the output string
-              #self.signal_acces_req_done.emit(self.mqtt_thread.publish(self.uid, self.code))
-              self.signal_acces_req_done.emit(self.nfc_uid, self.code)
-              self.code = ""
-              self.label_statut_porte.setText("Demande en cours...")
-              print("MQTT request signal sent!")
-            else:
-              saved_code  = open("codes.conf", "r")
-    
-              code_ok = False
-              has_codes = False
-
-              if("---new code---" in saved_code.read()):
-                has_codes = True
-                print("Loaded saved codes!") 
-              else:
-                print("No saved codes!")
-
-              saved_code.close()
-              saved_code  = open("codes.conf", "r")
-
-              for line in saved_code:
-               print(line)
-               if("---new code---" in line):
-                  if(has_codes == True):
-                     if(self.code in line):
-                          code_ok = True
-
-                          print("Acces Granted!")
-                          GPIO.output(RELAY_PIN, GPIO.LOW)
-                          self.label_statut_porte.setText("Porte ouverte") 
-                          self.timer = QTimer()
-                          self.timer.timeout.connect(self.close_door)
-                          self.timer.start(5000)
-                     if(code_ok == False):
-                          print("Acces Denied")
-                          GPIO.output(RELAY_PIN, GPIO.HIGH)
-                          self.label_statut_porte.setText("Acces Interdit!") 
-                          self.timer = QTimer()
-                          self.timer.timeout.connect(self.close_door)
-                          self.timer.start(5000)
-               else:
-                  print("Checking next line...")
-
-              saved_code.close()
-              self.code = ""
-        else:
-            self.label_statut_porte.setText("Entrez code!")
-            self.timer = QTimer()
-            self.timer.timeout.connect(self.close_door)
-            self.timer.start(5000)
+            self.signal_acces_req_done.emit(self.nfc_uid, self.code)
             self.code = ""
+            self.label_statut_porte.setText("Demande en cours...")
+            print("MQTT request signal sent!")
 
     def on_click_ann(self):
         self.code = ""
@@ -347,7 +283,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def on_click_2(self):
         self.code = self.code + "2"
         self.label_statut_porte.setText(self.code)
-        self.timer_code.stop()  
+        self.timer_code.stop()
 
     def on_click_3(self):
         self.code = self.code + "3"
@@ -416,6 +352,56 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def change_tab_nfc(self):
         self.toolBox.setCurrentIndex(0)
 
+    def local_check(self, uid, code):
+              ID = DOOR_ID
+              print("Checking local database!")
+
+              card_ok = False
+              has_cards = False
+
+              #self.label_statut_porte.setText("Aucune reponse MQTT, verification locale...")
+              #sleep(2)
+
+              saved_uid  = open("cards.conf", "r")
+
+              if("---new card---" in saved_uid.read()):
+                  has_cards = True
+                  print("Loaded saved cards!") 
+              else:
+                  print("No saved cards!")
+
+              saved_uid.close()
+              saved_uid  = open("cards.conf", "r")
+
+              for line in saved_uid:
+                  print(line)
+                  if("---new card---" in line):
+                      if(has_cards == True):
+                         if("#DOOR_ID:" + ID + "#" in line):
+                             if("#CARD_UID:" + uid + "#" in line):
+                                 if("#PASSCODE:" + code + "#" in line):
+                                     card_ok = True
+
+                                     print("Acces Granted!")
+                                     GPIO.output(RELAY_PIN, GPIO.LOW)
+                                     self.label_statut_porte.setText("Porte ouverte! (Verification hors ligne)") 
+                                     self.timer = QTimer()
+                                     self.timer.timeout.connect(self.close_door)
+                                     self.timer.start(5000)
+                  else:
+                      print("Checking next line...")
+
+                  if(card_ok == False):
+                                 print("Acces Denied")
+                                 GPIO.output(RELAY_PIN, GPIO.HIGH)
+                                 self.label_statut_porte.setText("Acces Interdit! (Verification hors ligne)") 
+                                 self.timer = QTimer()
+                                 self.timer.timeout.connect(self.close_door)
+                                 self.timer.start(5000)
+
+              saved_uid.close()
+
+
 def main():
     import sys
     app = QtWidgets.QApplication(sys.argv)
@@ -447,6 +433,7 @@ def main():
     mqtt_thread.signal_denied.connect(MainWindow.acces_denied)
     mqtt_thread.signal_alive.connect(nfc_thread.mqtt_alive)
     mqtt_thread.signal_dead.connect(nfc_thread.mqtt_dead)
+    mqtt_thread.signal_local_check.connect(MainWindow.local_check)
 
     #MainWindow
     MainWindow.signal_acces_req_done.connect(mqtt_thread.publish)
