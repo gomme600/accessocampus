@@ -13,9 +13,9 @@
 ##########################
 
 #Connection variables, change as required
-MQTT_server = ""
-MQTT_user = ""
-MQTT_password = ""
+MQTT_server = "neocampus.univ-tlse3.fr"
+MQTT_user = "test"
+MQTT_password = "test"
 #The MQTT topic where we find the authorisations
 MQTT_auth_topic = "TestTopic/auth"
 
@@ -41,6 +41,9 @@ except RuntimeError:
     print("Error importing RPi.GPIO!  This is probably because you need superuser privileges.  You can achieve this by using 'sudo' to run your script")
 
 import time
+
+#JSON
+import json #Used for converting to and from json strings
 
 #MQTT
 import paho.mqtt.client as mqtt #import the mqtt client
@@ -76,10 +79,11 @@ class MQTTThread(QThread):
     def __init__(self):
         QThread.__init__(self)
 
-    def publish(self, uid):
+    def publish(self, uid, code):
         #We publish the output string
         print("Publishing message to topic", MQTT_request_topic)
-        self.client.publish(MQTT_request_topic, uid + ":" + DOOR_ID)
+        mqtt_payload = {"door_id": 0, "auth_type": 0, "nfc_uid": uid, "passcode": code, "image": 0}
+        self.client.publish(MQTT_request_topic, json.dumps(mqtt_payload)) 
         print("MQTT request sent...")
 
     #Outputs log messages and call-backs in the console
@@ -138,6 +142,7 @@ class NFCThread(QThread):
     signal_granted = pyqtSignal()
     signal_denied = pyqtSignal()
     signal_acces_req = pyqtSignal(str, name='uid')
+    signal_code_request = pyqtSignal(str, name='uid')
 
     def mqtt_alive(self):
         print("MQTT alive received!")
@@ -172,7 +177,8 @@ class NFCThread(QThread):
           print(card_id)
           if(self.MQTT_started == True):
               #We publish the output string
-              self.signal_acces_req.emit(card_id)
+              #self.signal_acces_req.emit(card_id)
+              self.signal_code_request.emit(card_id)
               print("MQTT request signal sent!")
               sleep(4)
           else:
@@ -216,7 +222,8 @@ class NFCThread(QThread):
 class Ui_MainWindow(object):
 
     #MQTT signal
-    signal_acces_req = pyqtSignal(str, name='uid')
+    signal_acces_req_done = QtCore.pyqtSignal(str, str, name='uid')
+       
 
     #Definition of an empty code
     code = ""
@@ -327,6 +334,8 @@ class Ui_MainWindow(object):
         self.toolBox.layout().setSpacing(6)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
+        self.toolBox.setItemEnabled(1,False)
+
         MainWindow.showFullScreen()
 
         self.pushButton_dig_val_2.clicked.connect(self.on_click_ann)
@@ -341,17 +350,22 @@ class Ui_MainWindow(object):
         self.pushButton_dig_8.clicked.connect(self.on_click_8)
         self.pushButton_dig_9.clicked.connect(self.on_click_9)
 
+        self.mqtt_thread = MQTTThread
+        #self.signal_acces_req_done.connect(self.on_click_0)
+
     #@pyqtSlot()
     def on_click_val(self):
+        self.toolBox.setCurrentIndex(0)
         if(self.code != ""):
         
-              print("Checking code...")
-            #if(self.MQTT_started == True):
+            print("Checking code...")
+            if(True):
               #We publish the output string
-              #self.signal_acces_req.emit(self.code)
-              #print("MQTT request signal sent!")
-              #sleep(4)
-            #else:
+              #self.signal_acces_req_done.emit(self.mqtt_thread.publish(self.uid, self.code))
+              self.signal_acces_req_done.emit()
+              print("MQTT request signal sent!")
+              sleep(4)
+            else:
               saved_code  = open("codes.conf", "r")
     
               code_ok = False
@@ -401,46 +415,57 @@ class Ui_MainWindow(object):
     def on_click_ann(self):
         self.code = ""
         self.label_statut_porte.setText("Porte fermée")
+        self.toolBox.setCurrentIndex(0)
 
     def on_click_0(self):
         self.code = self.code + "0"
         self.label_statut_porte.setText(self.code)
+        self.timer_code.stop()
 
     def on_click_1(self):
         self.code = self.code + "1"
         self.label_statut_porte.setText(self.code)
+        self.timer_code.stop()
 
     def on_click_2(self):
         self.code = self.code + "2"
         self.label_statut_porte.setText(self.code)
-  
+        self.timer_code.stop()  
+
     def on_click_3(self):
         self.code = self.code + "3"
         self.label_statut_porte.setText(self.code)
+        self.timer_code.stop()
 
     def on_click_4(self):
         self.code = self.code + "4"
         self.label_statut_porte.setText(self.code)
+        self.timer_code.stop()
 
     def on_click_5(self):
         self.code = self.code + "5"
         self.label_statut_porte.setText(self.code)
+        self.timer_code.stop()
 
     def on_click_6(self):
         self.code = self.code + "6"
         self.label_statut_porte.setText(self.code)
+        self.timer_code.stop()
 
     def on_click_7(self):
         self.code = self.code + "7"
         self.label_statut_porte.setText(self.code)
+        self.timer_code.stop()
 
     def on_click_8(self):
         self.code = self.code + "8"
         self.label_statut_porte.setText(self.code)
+        self.timer_code.stop()
 
     def on_click_9(self):
         self.code = self.code + "9"
         self.label_statut_porte.setText(self.code)
+        self.timer_code.stop()
 
     def acces_granted(self):
         print("acces_granted")
@@ -464,6 +489,16 @@ class Ui_MainWindow(object):
         self.label_statut_porte.setText("Porte fermée")
         self.timer.stop()
 
+    def change_tab_code(self, uid):
+        self.toolBox.setCurrentIndex(1)
+        self.nfc_uid = uid
+        self.timer_code = QTimer()
+        self.timer_code.timeout.connect(self.change_tab_nfc)
+        self.timer_code.start(10000)
+
+    def change_tab_nfc(self):
+        self.toolBox.setCurrentIndex(0)
+
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "Accessocampus"))
@@ -482,7 +517,7 @@ class Ui_MainWindow(object):
         self.pushButton_dig_0.setText(_translate("MainWindow", "0"))
         self.pushButton_dig_val.setText(_translate("MainWindow", "Valider"))
         self.pushButton_dig_val_2.setText(_translate("MainWindow", "Annuler"))
-        self.toolBox.setItemText(self.toolBox.indexOf(self.page_2), _translate("MainWindow", "Code"))
+        self.toolBox.setItemText(self.toolBox.indexOf(self.page_2), _translate("MainWindow", ""))
         self.label_statut_porte.setText(_translate("MainWindow", "Porte fermée"))
 import accessocampus_GUI_rc
 
@@ -499,14 +534,13 @@ def main():
     nfc_thread = NFCThread()
     nfc_thread.start()  # Finally starts the thread
 
-    #MainWindow
-    #ui.signal_acces_req.connect(mqtt_thread.publish)
 
     #NFC
     # Connect the signal from the thread to the finished method
     nfc_thread.signal_granted.connect(ui.acces_granted)
     nfc_thread.signal_denied.connect(ui.acces_denied)
-    nfc_thread.signal_acces_req.connect(mqtt_thread.publish)
+    nfc_thread.signal_acces_req.connect(ui.change_tab_code)
+    nfc_thread.signal_code_request.connect(ui.change_tab_code)
     
     #MQTT
     #mqtt_thread = MQTTThread()
