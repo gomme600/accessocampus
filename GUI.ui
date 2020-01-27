@@ -58,7 +58,7 @@
        <x>0</x>
        <y>0</y>
        <width>801</width>
-       <height>327</height>
+       <height>280</height>
       </rect>
      </property>
      <attribute name="label">
@@ -108,7 +108,7 @@
        <x>0</x>
        <y>0</y>
        <width>801</width>
-       <height>327</height>
+       <height>280</height>
       </rect>
      </property>
      <attribute name="label">
@@ -250,6 +250,24 @@
       </property>
       <property name="text">
        <string>Annuler</string>
+      </property>
+     </widget>
+    </widget>
+    <widget class="QWidget" name="page_3">
+     <attribute name="label">
+      <string/>
+     </attribute>
+     <widget class="QLabel" name="label">
+      <property name="geometry">
+       <rect>
+        <x>220</x>
+        <y>10</y>
+        <width>360</width>
+        <height>240</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string/>
       </property>
      </widget>
     </widget>
