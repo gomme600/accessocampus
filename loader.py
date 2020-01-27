@@ -121,7 +121,7 @@ cam.set(cv2.CAP_PROP_FRAME_HEIGHT, CAM_HEIGHT)
 class FACEThread(QThread):
     #PyQT Signals
     signal_show_cam = pyqtSignal(np.ndarray, name='cam')
-    signal_face_found = pyqtSignal(np.ndarray, name='last_img')
+    signal_face_found = pyqtSignal()
     signal_acces_req_done = QtCore.pyqtSignal(str, str, bytes, str, name='uid')
 
     #Timer
@@ -196,7 +196,10 @@ class FACEThread(QThread):
                 jpg_as_text = base64.b64encode(img_buf)
                 print(jpg_as_text[:80])
                 self.signal_acces_req_done.emit(self.card_uid, "0", jpg_as_text, "cam")
-                time.sleep(4)
+                img = np.zeros((CAM_WIDTH,CAM_HEIGHT,3), np.uint8)
+                cv2.putText(img,'Traitement...', (10,700), cv2.FONT_HERSHEY_SIMPLEX, 4, (255,255,255), 8)
+                self.activate_cam = False
+                self.signal_face_found.emit()
                 
          #Lepton
          a,_ = l.capture()
@@ -231,6 +234,7 @@ class MQTTThread(QThread):
     signal_alive = pyqtSignal()
     signal_dead = pyqtSignal()
     signal_local_check = pyqtSignal(str, str, name='uid')
+    signal_code_request = pyqtSignal(str, name='uid')
 
     #Timeout timer
     mqtt_waiting_timer = QTimer()
@@ -240,7 +244,10 @@ class MQTTThread(QThread):
 
     def timeout(self):
         print("MQTT timed out!")
-        self.signal_local_check.emit(self.uid, self.code)
+        if(self.auth_type == "code"):
+            self.signal_local_check.emit(self.uid, self.code)
+        if(self.auth_type == "cam"):
+            self.signal_code_request.emit(self.uid)
         self.mqtt_waiting_timer.stop()
 
     def publish(self, uid, code, image, type):
@@ -337,7 +344,7 @@ class NFCThread(QThread):
     signal_acces_req = pyqtSignal(str, name='uid')
     signal_code_request = pyqtSignal(str, name='uid')
     signal_activate_cam = pyqtSignal(bool, str, name='cam_on')
-    signal_tab_cam = pyqtSignal()
+    signal_tab_cam = pyqtSignal(str, name='uid')
 
     def mqtt_alive(self):
         print("MQTT alive received!")
@@ -370,7 +377,7 @@ class NFCThread(QThread):
           print("Checking card...")
           print(card_id)
           #We publish the output string
-          self.signal_tab_cam.emit()
+          self.signal_tab_cam.emit(card_id)
           self.signal_activate_cam.emit(True, card_id)
           print("Cam request sent!")
           #self.signal_code_request.emit(card_id)
@@ -386,6 +393,9 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     #MQTT signal
     signal_acces_req_done = QtCore.pyqtSignal(str, str, str, str, name='uid')
     signal_activate_cam = QtCore.pyqtSignal(bool, name='cam_on')
+
+    #Variables
+    face_detected = False
 
     def __init__(self):
         QtWidgets.QMainWindow.__init__(self)
@@ -422,6 +432,9 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         #self.signal_acces_req_done.connect(mqtt_thread.publish)
 
     #@pyqtSlot()
+
+    def face_found(self):
+        self.face_detected = True
 
     def cam_toggle(self, cam_bool):
         self.signal_activate_cam.emit(cam_bool)
@@ -533,13 +546,18 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.signal_activate_cam.emit(False)
         self.timer_cam.stop()
         self.toolBox.setCurrentIndex(0)
+        if(self.face_detected == False):
+            self.change_tab_code(self.nfc_uid)
+            self.face_detected = False
+        self.face_detected = False
 
-    def change_tab_cam(self):
+    def change_tab_cam(self, uid):
         print("Changing to cam tab and setting up timer")
         self.toolBox.setCurrentIndex(2)
         self.timer_cam = QTimer()
         self.timer_cam.timeout.connect(self.cam_off)
         self.timer_cam.start(5000)
+        self.nfc_uid = uid
 
     def local_check(self, uid, code):
               ID = DOOR_ID
@@ -623,6 +641,7 @@ def main():
     mqtt_thread.signal_alive.connect(nfc_thread.mqtt_alive)
     mqtt_thread.signal_dead.connect(nfc_thread.mqtt_dead)
     mqtt_thread.signal_local_check.connect(MainWindow.local_check)
+    mqtt_thread.signal_code_request.connect(MainWindow.change_tab_code)
 
     #Face recognition
     face_thread = FACEThread()
@@ -632,6 +651,7 @@ def main():
     nfc_thread.signal_activate_cam.connect(face_thread.activate_cam_fct)
     nfc_thread.signal_tab_cam.connect(MainWindow.change_tab_cam)
     face_thread.signal_acces_req_done.connect(mqtt_thread.publish)
+    face_thread.signal_face_found.connect(MainWindow.face_found)
 
     #MainWindow
     MainWindow.signal_acces_req_done.connect(mqtt_thread.publish)
