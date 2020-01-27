@@ -6,8 +6,8 @@ import numpy as np
 from pylepton import Lepton
 
 # Load the cascade
-face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
-
+#face_cascade = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 # setup pi camera 
 if os.path.exists('/dev/video0') == False:
   path = 'sudo modprobe bcm2835-v4l2'
@@ -19,8 +19,8 @@ os.system (path)
 # start video
 cam = cv2.VideoCapture(0)
 
-cam.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-cam.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+cam.set(cv2.CAP_PROP_FRAME_WIDTH, 160)
+cam.set(cv2.CAP_PROP_FRAME_HEIGHT, 120)
 # setup window
 winName = "Scope"
 cv2.namedWindow(winName)
@@ -36,14 +36,14 @@ with Lepton() as l:
     gray_cam = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     # Detect faces
-    faces = face_cascade.detectMultiScale(gray, 1.1, 4)
+    faces = face_cascade.detectMultiScale(gray_cam, 1.1, 4)
     # Draw rectangle around the faces
     for (x, y, w, h) in faces:
         cv2.rectangle(img, (x, y), (x+w, y+h), (255, 0, 0), 2)
 
     #Lepton
     a,_ = l.capture()
-    a = cv2.resize(a, (320, 240))
+    a = cv2.resize(a, (160, 120))
     cv2.normalize(a, a, 0, 65535, cv2.NORM_MINMAX) # extend contrast
     np.right_shift(a, 8, a) # fit data into 8 bits
     #cv2.imwrite("output.jpg", np.uint8(a)) # write it!
@@ -54,11 +54,11 @@ with Lepton() as l:
     (minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(a)
     cv2.circle(a, maxLoc, 41, (0, 0, 204), 2)
 
-    #color = cv2.cvtColor(np.uint8(a), cv2.COLOR_GRAY2BGR)
+    color = cv2.cvtColor(np.uint8(a), cv2.COLOR_GRAY2BGR)
 
     # add the 2 images
     #added_image = cv2.addWeighted(img,0.9,np.uint8(a),0.4,0.2)
-    added_image = cv2.addWeighted(img,0.9,np.uint8(a),0.4,0.2)
+    added_image = cv2.addWeighted(img,0.9,color,0.4,0.2)
     #added_image = img
     # show image
     cv2.imshow( winName,added_image)

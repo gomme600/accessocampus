@@ -21,6 +21,16 @@ DOOR_ID = "92"
 #MQTT timeout interval (in seconds)
 MQTT_TIMEOUT = 5
 
+#Face recognition image size
+CAM_WIDTH = 960
+CAM_HEIGHT = 720
+#Face recognition is performed at 160X120 so we set a scale factor based on the capture size (example: 4 if capture:$
+SCALE_FACTOR = 6
+#MQTT image quality/scale
+#percent by which the image is resized
+SCALE_PERCENT = 100
+
+
 ##########################
 ##----END  SETTINGS----###
 ##########################
@@ -34,6 +44,15 @@ except RuntimeError:
     print("Error importing RPi.GPIO!  This is probably because you need superuser privileges.  You can achieve this by using 'sudo' to run your script")
 
 import time
+
+#CV2 and Lepton thermal camera
+import cv2
+import os
+import numpy as np
+from pylepton import Lepton
+
+#Base64
+import base64
 
 #Ressource file
 import accessocampus_GUI_rc
@@ -70,9 +89,141 @@ GPIO.setup(RELAY_PIN, GPIO.OUT, initial=GPIO.HIGH)
 #NFC Setup###
 pn532 = Pn532_i2c()
 pn532.SAMconfigure()
+
+####Face recognition setup####
+
+# Load the face recognition cascade
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+# setup pi camera 
+if os.path.exists('/dev/video0') == False:
+  path = 'sudo modprobe bcm2835-v4l2'
+  os.system (path)
+  time.sleep(1)
+path = 'v4l2-ctl --set-ctrl=auto_exposure=0'
+os.system (path)
+  
+# start video
+cam = cv2.VideoCapture(0)
+
+cam.set(cv2.CAP_PROP_FRAME_WIDTH, CAM_WIDTH)
+cam.set(cv2.CAP_PROP_FRAME_HEIGHT, CAM_HEIGHT)
+
+#Face recognition is performed at 160X120 so we set a scale factor based on the capture size (example: 4 if capture: 640X480)
+#SCALE_FACTOR = 4
+
+##############################
+
 #############
 
 ######THREADS######
+
+#Face recognition Thread
+class FACEThread(QThread):
+    #PyQT Signals
+    signal_show_cam = pyqtSignal(np.ndarray, name='cam')
+    signal_face_found = pyqtSignal(np.ndarray, name='last_img')
+    signal_acces_req_done = QtCore.pyqtSignal(str, str, bytes, str, name='uid')
+
+    #Timer
+    #face_timer = QTimer()
+
+    def __init__(self):
+        QThread.__init__(self)
+        self.activate_cam = False
+
+    def activate_cam_fct(self, cam_on, uid=None):
+        print("Camera on/off: ")
+        print(cam_on)
+        self.activate_cam = cam_on
+        if(uid != None):
+            self.card_uid = uid
+
+    def camera_off(self):
+        print("Camera on/off: ")
+        print(False)
+        self.activate_cam = False
+
+    # run method gets called when we start the thread
+    def run(self):
+
+     print("Camera Thread!")
+     while True:
+
+      if(self.activate_cam == True):
+       #print("Camera Timer!")
+       #self.face_timer.timeout.connect(self.camera_off)
+       #self.face_timer.start(5000)
+       face_cpt = 0
+
+       with Lepton() as l:
+        while self.activate_cam == True:
+
+         # take video frame
+         ok, img = cam.read()
+
+         gray_cam = cv2.cvtColor(cv2.resize(img, (160, 120)), cv2.COLOR_BGR2GRAY)
+
+         # Detect faces
+         faces = face_cascade.detectMultiScale(gray_cam, 1.1, 4)
+         # Draw rectangle around the faces
+         for (x, y, w, h) in faces:
+            cv2.rectangle(img, (SCALE_FACTOR*x, SCALE_FACTOR*y), (SCALE_FACTOR*x+SCALE_FACTOR*w, SCALE_FACTOR*y+SCALE_FACTOR*h), (255, 0, 0), 2)
+            print("Found face!")
+            print(faces)
+            face_cpt = face_cpt+1
+            if(face_cpt > 8):
+                face_cpt = 0
+                #img = cv2.resize(img, (80, 60))
+                crop_img = img[SCALE_FACTOR*y:SCALE_FACTOR*y+SCALE_FACTOR*h, SCALE_FACTOR*x:SCALE_FACTOR*x+SCALE_FACTOR*w]
+                
+                #MQTT image quality/scale
+                #percent by which the image is resized
+                #scale_percent = 50
+
+                #calculate the 50 percent of original dimensions
+                width = int(crop_img.shape[1] * SCALE_PERCENT / 100)
+                height = int(crop_img.shape[0] * SCALE_PERCENT / 100)
+
+                # dsize
+                dsize = (width, height)
+
+                # resize image
+                crop_img = cv2.resize(crop_img, dsize)
+
+                retval, img_buf = cv2.imencode('.jpg', crop_img)
+                print(img_buf)
+                # Convert to base64 encoding and show start of data
+                jpg_as_text = base64.b64encode(img_buf)
+                print(jpg_as_text[:80])
+                self.signal_acces_req_done.emit(self.card_uid, "0", jpg_as_text, "cam")
+                time.sleep(4)
+                
+         #Lepton
+         a,_ = l.capture()
+         #a = cv2.resize(a, (320, 240))
+         cv2.normalize(a, a, 0, 65535, cv2.NORM_MINMAX) # extend contrast
+         np.right_shift(a, 8, a) # fit data into 8 bits
+         #cv2.imwrite("output.jpg", np.uint8(a)) # write it!
+    
+         # perform a naive attempt to find the (x, y) coordinates of
+         # the area of the image with the largest intensity value
+         a = cv2.GaussianBlur(a, (41, 41), 0)
+         (minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(a)
+         cv2.circle(a, maxLoc, 10, (0, 0, 204), 2)
+
+         a = cv2.resize(a, (320, 240))
+         
+         color = cv2.cvtColor(np.uint8(a), cv2.COLOR_GRAY2BGR)
+
+         img = cv2.resize(img, (320, 240))
+
+         # add the 2 images
+         #added_image = cv2.addWeighted(img,0.9,np.uint8(a),0.4,0.2)
+         added_image = cv2.addWeighted(img,0.9,color,0.4,0.2)
+         #added_image = img
+         # show image
+         self.signal_show_cam.emit(added_image)
+
 #MQTT Thread
 class MQTTThread(QThread):
     signal_granted = pyqtSignal()
@@ -92,12 +243,20 @@ class MQTTThread(QThread):
         self.signal_local_check.emit(self.uid, self.code)
         self.mqtt_waiting_timer.stop()
 
-    def publish(self, uid, code):
+    def publish(self, uid, code, image, type):
         self.uid = uid
-        self.code = code
+        self.auth_type = type
+        if(type == "code"):
+            self.code = code
+            self.image = 0
+
+        if(type == "cam"): 
+            self.code = "0"
+            #self.image = image.tolist()
+            self.image = list(image)
         #We publish the output string
         print("Publishing message to topic", MQTT_request_topic)
-        mqtt_payload = {"door_id": DOOR_ID, "auth_type": 0, "nfc_uid": self.uid, "passcode": self.code, "image": 0}
+        mqtt_payload = {"door_id": DOOR_ID, "auth_type": self.auth_type, "nfc_uid": self.uid, "passcode": self.code, "image": self.image}
         self.client.publish(MQTT_request_topic, json.dumps(mqtt_payload)) 
         print("MQTT request sent...")
         self.mqtt_waiting = True
@@ -177,6 +336,8 @@ class NFCThread(QThread):
     signal_denied = pyqtSignal()
     signal_acces_req = pyqtSignal(str, name='uid')
     signal_code_request = pyqtSignal(str, name='uid')
+    signal_activate_cam = pyqtSignal(bool, str, name='cam_on')
+    signal_tab_cam = pyqtSignal()
 
     def mqtt_alive(self):
         print("MQTT alive received!")
@@ -209,7 +370,10 @@ class NFCThread(QThread):
           print("Checking card...")
           print(card_id)
           #We publish the output string
-          self.signal_code_request.emit(card_id)
+          self.signal_tab_cam.emit()
+          self.signal_activate_cam.emit(True, card_id)
+          print("Cam request sent!")
+          #self.signal_code_request.emit(card_id)
           print("Code request signal sent!")
           sleep(4)
 ######
@@ -220,7 +384,8 @@ class NFCThread(QThread):
 class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     #MQTT signal
-    signal_acces_req_done = QtCore.pyqtSignal(str, str, name='uid')
+    signal_acces_req_done = QtCore.pyqtSignal(str, str, str, str, name='uid')
+    signal_activate_cam = QtCore.pyqtSignal(bool, name='cam_on')
 
     def __init__(self):
         QtWidgets.QMainWindow.__init__(self)
@@ -234,7 +399,9 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         #Definition of an empty code
         self.code = ""
         
+        #Disable hidden tabs (code, face detection)
         self.toolBox.setItemEnabled(1,False)
+        self.toolBox.setItemEnabled(2,False)
 
         #self.MainWindow.showFullScreen()
 
@@ -255,12 +422,21 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         #self.signal_acces_req_done.connect(mqtt_thread.publish)
 
     #@pyqtSlot()
+
+    def cam_toggle(self, cam_bool):
+        self.signal_activate_cam.emit(cam_bool)
+
+    def show_image(self, image):
+        self.image = image
+        self.image = QtGui.QImage(self.image.data, self.image.shape[1], self.image.shape[0], QtGui.QImage.Format_RGB888).rgbSwapped()
+        self.label_cam_img.setPixmap(QtGui.QPixmap.fromImage(self.image))
+
     def on_click_val(self):
         self.toolBox.setCurrentIndex(0)
         if(self.code != ""):
 
             print("Checking code...")
-            self.signal_acces_req_done.emit(self.nfc_uid, self.code)
+            self.signal_acces_req_done.emit(self.nfc_uid, self.code, "0", "code")
             self.code = ""
             self.label_statut_porte.setText("Demande en cours...")
             print("MQTT request signal sent!")
@@ -352,6 +528,19 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def change_tab_nfc(self):
         self.toolBox.setCurrentIndex(0)
 
+    def cam_off(self):
+        print("Requesting to turn cam off")
+        self.signal_activate_cam.emit(False)
+        self.timer_cam.stop()
+        self.toolBox.setCurrentIndex(0)
+
+    def change_tab_cam(self):
+        print("Changing to cam tab and setting up timer")
+        self.toolBox.setCurrentIndex(2)
+        self.timer_cam = QTimer()
+        self.timer_cam.timeout.connect(self.cam_off)
+        self.timer_cam.start(5000)
+
     def local_check(self, uid, code):
               ID = DOOR_ID
               print("Checking local database!")
@@ -435,8 +624,18 @@ def main():
     mqtt_thread.signal_dead.connect(nfc_thread.mqtt_dead)
     mqtt_thread.signal_local_check.connect(MainWindow.local_check)
 
+    #Face recognition
+    face_thread = FACEThread()
+    face_thread.start()
+
+    face_thread.signal_show_cam.connect(MainWindow.show_image)
+    nfc_thread.signal_activate_cam.connect(face_thread.activate_cam_fct)
+    nfc_thread.signal_tab_cam.connect(MainWindow.change_tab_cam)
+    face_thread.signal_acces_req_done.connect(mqtt_thread.publish)
+
     #MainWindow
     MainWindow.signal_acces_req_done.connect(mqtt_thread.publish)
+    MainWindow.signal_activate_cam.connect(face_thread.activate_cam_fct)
 
     sys.exit(app.exec_())
     GPIO.cleanup()
