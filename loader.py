@@ -28,8 +28,9 @@ CAM_HEIGHT = 720
 SCALE_FACTOR = 6
 #MQTT image quality/scale
 #percent by which the image is resized
-SCALE_PERCENT = 100
-
+SCALE_PERCENT = 10
+#Do we have a thermal camera?
+THERMAL_CAM = True
 
 ##########################
 ##----END  SETTINGS----###
@@ -108,9 +109,6 @@ cam = cv2.VideoCapture(0)
 cam.set(cv2.CAP_PROP_FRAME_WIDTH, CAM_WIDTH)
 cam.set(cv2.CAP_PROP_FRAME_HEIGHT, CAM_HEIGHT)
 
-#Face recognition is performed at 160X120 so we set a scale factor based on the capture size (example: 4 if capture: 640X480)
-#SCALE_FACTOR = 4
-
 ##############################
 
 #############
@@ -122,7 +120,7 @@ class FACEThread(QThread):
     #PyQT Signals
     signal_show_cam = pyqtSignal(np.ndarray, name='cam')
     signal_face_found = pyqtSignal()
-    signal_acces_req_done = QtCore.pyqtSignal(str, str, bytes, str, name='uid')
+    signal_acces_req_done = QtCore.pyqtSignal(str, str, bytes, str, bool, name='uid')
 
     #Timer
     #face_timer = QTimer()
@@ -157,6 +155,21 @@ class FACEThread(QThread):
 
        with Lepton() as l:
         while self.activate_cam == True:
+
+         if(THERMAL_CAM == True):
+             #Lepton
+             a,_ = l.capture()
+             #a = cv2.resize(a, (320, 240))
+             cv2.normalize(a, a, 0, 65535, cv2.NORM_MINMAX) # extend contrast
+             np.right_shift(a, 8, a) # fit data into 8 bits
+             #cv2.imwrite("output.jpg", np.uint8(a)) # write it!
+    
+             # perform a naive attempt to find the (x, y) coordinates of
+             # the area of the image with the largest intensity value
+             a = cv2.GaussianBlur(a, (41, 41), 0)
+             (minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(a)
+             cv2.circle(a, maxLoc, 10, (0, 0, 204), 2)
+             a = cv2.resize(a, (320, 240))
 
          # take video frame
          ok, img = cam.read()
@@ -195,37 +208,44 @@ class FACEThread(QThread):
                 # Convert to base64 encoding and show start of data
                 jpg_as_text = base64.b64encode(img_buf)
                 print(jpg_as_text[:80])
-                self.signal_acces_req_done.emit(self.card_uid, "0", jpg_as_text, "cam")
+
+                if(THERMAL_CAM == True):
+                    if(((SCALE_FACTOR*x) <= ((2+SCALE_FACTOR)*maxLoc[0]) <= (SCALE_FACTOR*x+SCALE_FACTOR*w)) & ((SCALE_FACTOR*y) <= ((2+SCALE_FACTOR)*maxLoc[1]) <= (SCALE_FACTOR*y+SCALE_FACTOR*h))):
+                        print("Thermal max on face")
+                        thermal_detect = True
+                    else:
+                        print("Thermal max not on face")
+                        thermal_detect = False
+
+                    self.signal_acces_req_done.emit(self.card_uid, "0", jpg_as_text, "cam+thermal", thermal_detect) 
+
+                if(THERMAL_CAM == False):
+                    self.signal_acces_req_done.emit(self.card_uid, "0", jpg_as_text, "cam", False)
+
+                #Display 'Traitement...' and turn off camera
                 img = np.zeros((CAM_WIDTH,CAM_HEIGHT,3), np.uint8)
                 cv2.putText(img,'Traitement...', (10,700), cv2.FONT_HERSHEY_SIMPLEX, 4, (255,255,255), 8)
                 self.activate_cam = False
                 self.signal_face_found.emit()
+
+         if(THERMAL_CAM == True):
                 
-         #Lepton
-         a,_ = l.capture()
-         #a = cv2.resize(a, (320, 240))
-         cv2.normalize(a, a, 0, 65535, cv2.NORM_MINMAX) # extend contrast
-         np.right_shift(a, 8, a) # fit data into 8 bits
-         #cv2.imwrite("output.jpg", np.uint8(a)) # write it!
-    
-         # perform a naive attempt to find the (x, y) coordinates of
-         # the area of the image with the largest intensity value
-         a = cv2.GaussianBlur(a, (41, 41), 0)
-         (minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(a)
-         cv2.circle(a, maxLoc, 10, (0, 0, 204), 2)
-
-         a = cv2.resize(a, (320, 240))
+             a = cv2.resize(a, (320, 240))
          
-         color = cv2.cvtColor(np.uint8(a), cv2.COLOR_GRAY2BGR)
+             color = cv2.cvtColor(np.uint8(a), cv2.COLOR_GRAY2BGR)
 
-         img = cv2.resize(img, (320, 240))
+             img = cv2.resize(img, (320, 240))
 
-         # add the 2 images
-         #added_image = cv2.addWeighted(img,0.9,np.uint8(a),0.4,0.2)
-         added_image = cv2.addWeighted(img,0.9,color,0.4,0.2)
-         #added_image = img
-         # show image
-         self.signal_show_cam.emit(added_image)
+             # add the 2 images
+             #added_image = cv2.addWeighted(img,0.9,np.uint8(a),0.4,0.2)
+             added_image = cv2.addWeighted(img,0.9,color,0.4,0.2)
+             #added_image = img
+             # show image
+             self.signal_show_cam.emit(added_image)
+
+         if(THERMAL_CAM == False):
+             img = cv2.resize(img, (320, 240))
+             self.signal_show_cam.emit(img)
 
 #MQTT Thread
 class MQTTThread(QThread):
@@ -248,22 +268,32 @@ class MQTTThread(QThread):
             self.signal_local_check.emit(self.uid, self.code)
         if(self.auth_type == "cam"):
             self.signal_code_request.emit(self.uid)
+        if(self.auth_type == "cam+thermal"):
+            self.signal_code_request.emit(self.uid)
         self.mqtt_waiting_timer.stop()
 
-    def publish(self, uid, code, image, type):
+    def publish(self, uid, code, image, type, thermal_detect=False):
         self.uid = uid
         self.auth_type = type
         if(type == "code"):
             self.code = code
             self.image = 0
+            self.thermal_detect = thermal_detect
 
         if(type == "cam"): 
             self.code = "0"
             #self.image = image.tolist()
             self.image = list(image)
+            self.thermal_detect = thermal_detect
+
+        if(type == "cam+thermal"): 
+            self.code = "0"
+            #self.image = image.tolist()
+            self.image = list(image)
+            self.thermal_detect = thermal_detect
         #We publish the output string
         print("Publishing message to topic", MQTT_request_topic)
-        mqtt_payload = {"door_id": DOOR_ID, "auth_type": self.auth_type, "nfc_uid": self.uid, "passcode": self.code, "image": self.image}
+        mqtt_payload = {"door_id": DOOR_ID, "auth_type": self.auth_type, "nfc_uid": self.uid, "passcode": self.code, "thermal_detect": self.thermal_detect, "image": self.image}
         self.client.publish(MQTT_request_topic, json.dumps(mqtt_payload)) 
         print("MQTT request sent...")
         self.mqtt_waiting = True
