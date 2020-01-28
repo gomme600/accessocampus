@@ -24,13 +24,16 @@ MQTT_TIMEOUT = 5
 #Face recognition image size
 CAM_WIDTH = 960
 CAM_HEIGHT = 720
-#Face recognition is performed at 160X120 so we set a scale factor based on the capture size (example: 4 if capture:$
+#Face recognition is performed at 160X120px so we set a scale factor based on the capture size (example: 4 if capture:$
 SCALE_FACTOR = 6
 #MQTT image quality/scale
 #percent by which the image is resized
-SCALE_PERCENT = 10
+SCALE_PERCENT = 80
 #Do we have a thermal camera?
 THERMAL_CAM = True
+#Is there an offset compared to the normal camera (offset based on the original 80x60px image)?
+THERMAL_OFFSET_X = 0
+THERMAL_OFFSET_Y = 0
 
 ##########################
 ##----END  SETTINGS----###
@@ -168,7 +171,7 @@ class FACEThread(QThread):
              # the area of the image with the largest intensity value
              a = cv2.GaussianBlur(a, (41, 41), 0)
              (minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(a)
-             cv2.circle(a, maxLoc, 10, (0, 0, 204), 2)
+             cv2.circle(a, ((maxLoc[0]+THERMAL_OFFSET_X),(maxLoc[1]+THERMAL_OFFSET_Y)), 10, (0, 0, 204), 2)
              a = cv2.resize(a, (320, 240))
 
          # take video frame
@@ -203,14 +206,23 @@ class FACEThread(QThread):
                 # resize image
                 crop_img = cv2.resize(crop_img, dsize)
 
+                #Convert the cropped image of just the face to jpeg
                 retval, img_buf = cv2.imencode('.jpg', crop_img)
                 print(img_buf)
                 # Convert to base64 encoding and show start of data
                 jpg_as_text = base64.b64encode(img_buf)
                 print(jpg_as_text[:80])
 
+                print("Face Values:")
+                print("rectangle x: ", SCALE_FACTOR*x)
+                print("rectangle y: ", SCALE_FACTOR*y)
+                print("rectangle x+w: ", SCALE_FACTOR*x+SCALE_FACTOR*w)
+                print("rectangle y+h: ", SCALE_FACTOR*y+SCALE_FACTOR*h)
+                print("circle x: ", (2*SCALE_FACTOR)*(maxLoc[0]+0.1+THERMAL_OFFSET_X))
+                print("circle y: ", (2*SCALE_FACTOR)*(maxLoc[1]+0.1+THERMAL_OFFSET_Y))
+
                 if(THERMAL_CAM == True):
-                    if(((SCALE_FACTOR*x) <= ((2+SCALE_FACTOR)*maxLoc[0]) <= (SCALE_FACTOR*x+SCALE_FACTOR*w)) & ((SCALE_FACTOR*y) <= ((2+SCALE_FACTOR)*maxLoc[1]) <= (SCALE_FACTOR*y+SCALE_FACTOR*h))):
+                    if(((SCALE_FACTOR*x) <= ((2*SCALE_FACTOR)*(maxLoc[0]+0.1+THERMAL_OFFSET_X)) <= (SCALE_FACTOR*x+SCALE_FACTOR*w)) & ((SCALE_FACTOR*y) <= ((2*SCALE_FACTOR)*(maxLoc[1]+0.1+THERMAL_OFFSET_Y)) <= (SCALE_FACTOR*y+SCALE_FACTOR*h))):
                         print("Thermal max on face")
                         thermal_detect = True
                     else:
@@ -333,6 +345,10 @@ class MQTTThread(QThread):
                     print("Acces Denied via MQTT!")
                     self.signal_denied.emit()
 
+                if(str(inData["command"]) == "ask_code"):
+                    print("Code requested via MQTT!")
+                    self.signal_code_request.emit(self.uid)
+
     # run method gets called when we start the thread
     def run(self):
 
@@ -426,6 +442,9 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     #Variables
     face_detected = False
+
+    #Timers
+    timer_cam = QTimer()
 
     def __init__(self):
         QtWidgets.QMainWindow.__init__(self)
@@ -564,12 +583,15 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def change_tab_code(self, uid):
         self.toolBox.setCurrentIndex(1)
         self.nfc_uid = uid
+        self.timer_cam.stop()
         self.timer_code = QTimer()
         self.timer_code.timeout.connect(self.change_tab_nfc)
         self.timer_code.start(10000)
 
     def change_tab_nfc(self):
         self.toolBox.setCurrentIndex(0)
+        self.code = ""
+        self.label_statut_porte.setText("Presentez Carte")
 
     def cam_off(self):
         print("Requesting to turn cam off")
@@ -584,7 +606,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def change_tab_cam(self, uid):
         print("Changing to cam tab and setting up timer")
         self.toolBox.setCurrentIndex(2)
-        self.timer_cam = QTimer()
+        #self.timer_cam = QTimer()
         self.timer_cam.timeout.connect(self.cam_off)
         self.timer_cam.start(5000)
         self.nfc_uid = uid
