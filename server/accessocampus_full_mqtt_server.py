@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-   NeOCampus mqtt accessocampus server
+   NeOCampus mqtt accessocampus server with image recognition
    Author : Sebastian Lucas 2019-2020
 """
 
