@@ -1,0 +1,3 @@
+[submodule "client/py532lib_1"]
+	path = client/py532lib_1
+	url = https://github.com/HubCityLabs/py532lib.git

@@ -1,0 +1,10 @@
+Metadata-Version: 1.0
+Name: pylepton
+Version: 0.1.2
+Summary: FLIR Lepton interface library for Python
+Home-page: https://github.com/kekiefer/pylepton
+Author: Kurt Kiefer
+Author-email: kurt@kieferware.com
+License: UNKNOWN
+Description: UNKNOWN
+Platform: UNKNOWN
