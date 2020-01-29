@@ -51,7 +51,7 @@ CAM_HEIGHT = 720
 SCALE_FACTOR = 6
 #MQTT image quality/scale
 #percent by which the image is resized
-SCALE_PERCENT = 80
+SCALE_PERCENT = 40
 #Do we have a thermal camera?
 THERMAL_CAM = True
 #Is there an offset compared to the normal camera (offset based on the original 80x60px image)?
