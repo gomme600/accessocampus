@@ -136,6 +136,7 @@ if(CAMERA_ENABLED == True):
     cam.set(cv2.CAP_PROP_FRAME_WIDTH, CAM_WIDTH)
     cam.set(cv2.CAP_PROP_FRAME_HEIGHT, CAM_HEIGHT)
 
+    #cam.set(cv2.CAP_PROP_BUFFERSIZE,1)
 ##############################
 
 #############
@@ -147,11 +148,13 @@ class FACEThread(QThread):
     #PyQT Signals
     signal_show_cam = pyqtSignal(np.ndarray, name='cam')
     signal_face_found = pyqtSignal()
-    signal_acces_req_done = QtCore.pyqtSignal(str, str, bytes, str, bool, name='uid')
+    signal_acces_req_done = QtCore.pyqtSignal(str, str, bytes, str, bool, name='acces_req_done')
 
     def __init__(self):
         QThread.__init__(self)
+        #Default values on startup
         self.activate_cam = False
+        self.cam_startup = 0
 
     def activate_cam_fct(self, cam_on, uid=None):
         print("Camera on/off: ")
@@ -200,10 +203,12 @@ class FACEThread(QThread):
          #Get a 160x120px B&W camera image to quickly detect if a face is present
          gray_cam = cv2.cvtColor(cv2.resize(img, (160, 120)), cv2.COLOR_BGR2GRAY)
 
-         # Detect faces
-         faces = face_cascade.detectMultiScale(gray_cam, 1.1, 4)
-         # Draw rectangle around the faces
-         for (x, y, w, h) in faces:
+         #Make sur that we dont detect faces from the old buffer
+         if(self.cam_startup > 8):
+          # Detect faces
+          faces = face_cascade.detectMultiScale(gray_cam, 1.1, 4)
+          # Draw rectangle around the faces
+          for (x, y, w, h) in faces:
             #Draw the rectangle, SCALE_FACTOR adjusts the rectangle to the chosen display resolution
             cv2.rectangle(img, (SCALE_FACTOR*x, SCALE_FACTOR*y), (SCALE_FACTOR*x+SCALE_FACTOR*w, SCALE_FACTOR*y+SCALE_FACTOR*h), (255, 0, 0), 2)
             print("Found face!")
@@ -258,8 +263,14 @@ class FACEThread(QThread):
                 #Display 'Traitement...' and turn off camera
                 img = np.zeros((CAM_WIDTH,CAM_HEIGHT,3), np.uint8)
                 cv2.putText(img,'Traitement...', (10,700), cv2.FONT_HERSHEY_SIMPLEX, 3, (255,255,255), 8)
+                self.cam_startup = 0
                 self.activate_cam = False
                 self.signal_face_found.emit()
+
+         #Show a blank screen to avoid disclosing last persons face on startup
+         if((self.cam_startup < 8) & (self.activate_cam == True)):
+             img = np.zeros((CAM_WIDTH,CAM_HEIGHT,3), np.uint8)
+             cv2.putText(img,'Demarrage...', (10,700), cv2.FONT_HERSHEY_SIMPLEX, 3, (255,255,255), 8)
 
          #If the thermal camera is present then overlay and display the images
          if(THERMAL_CAM == True):
@@ -273,11 +284,13 @@ class FACEThread(QThread):
 
              # show image
              self.signal_show_cam.emit(added_image)
+             self.cam_startup = self.cam_startup + 1
 
          #If the thermal camera isn't present then display the camera by itself
          if(THERMAL_CAM == False):
              img = cv2.resize(img, (320, 240))
              self.signal_show_cam.emit(img)
+             self.cam_startup = self.cam_startup + 1
 
 #MQTT Thread
 class MQTTThread(QThread):
@@ -286,14 +299,18 @@ class MQTTThread(QThread):
     signal_denied = pyqtSignal()
     signal_alive = pyqtSignal()
     signal_dead = pyqtSignal()
-    signal_local_check = pyqtSignal(str, str, name='uid')
-    signal_code_request = pyqtSignal(str, name='uid')
+    signal_local_check = pyqtSignal(str, str, name='local_check')
+    signal_code_request = pyqtSignal(str, name='code_req')
 
     #Timeout timer
     mqtt_waiting_timer = QTimer()
 
     def __init__(self):
         QThread.__init__(self)
+        #Timer setup
+        self.mqtt_waiting_timer.timeout.connect(self.timeout)
+        #Waiting variable setup
+        self.mqtt_waiting = False
 
     def timeout(self):
         #On MQTT timeout we decide what to do
@@ -305,6 +322,7 @@ class MQTTThread(QThread):
         if(self.auth_type == "cam+thermal"):
             self.signal_code_request.emit(self.uid)
         self.mqtt_waiting_timer.stop()
+        self.mqtt_waiting = False
 
     def publish(self, uid, code, image, type, thermal_detect=False):
         #Assemble the MQTT parameters based on the authorisation type
@@ -335,9 +353,9 @@ class MQTTThread(QThread):
         self.client.publish(MQTT_request_topic, json.dumps(mqtt_payload)) 
         print("MQTT request sent...")
         #We start waiting for a response
-        self.mqtt_waiting = True
-        self.mqtt_waiting_timer.timeout.connect(self.timeout)
-        self.mqtt_waiting_timer.start(MQTT_TIMEOUT*1000)
+        if(self.mqtt_waiting == False):
+            self.mqtt_waiting = True
+            self.mqtt_waiting_timer.start(MQTT_TIMEOUT*1000)
 
 
     #Outputs log messages and call-backs in the console
@@ -418,10 +436,11 @@ class NFCThread(QThread):
     #Signal definitions
     signal_granted = pyqtSignal()
     signal_denied = pyqtSignal()
-    signal_acces_req = pyqtSignal(str, name='uid')
-    signal_code_request = pyqtSignal(str, name='uid')
+    signal_acces_req = pyqtSignal(str, name='acces_req')
+    signal_code_request = pyqtSignal(str, name='code_req')
     signal_activate_cam = pyqtSignal(bool, str, name='cam_on')
-    signal_tab_cam = pyqtSignal(str, name='uid')
+    signal_change_tab_cam = pyqtSignal(str, name='cam_req')
+    signal_card_detected = pyqtSignal()
 
     def mqtt_alive(self):
         print("MQTT alive received!")
@@ -438,7 +457,7 @@ class NFCThread(QThread):
     # run method gets called when we start the thread
     def run(self):
         
-       print("Thread!")
+       print("NFC Thread!")
 
        while True:
           # Check if a card is available to read
@@ -453,10 +472,11 @@ class NFCThread(QThread):
               card_id += str(block)
           print("Checking card...")
           print(card_id)
+          self.signal_card_detected.emit()
           #We publish the output string
-          self.signal_tab_cam.emit(card_id)
           if(CAMERA_ENABLED == True):
               self.signal_activate_cam.emit(True, card_id)
+              self.signal_change_tab_cam.emit(card_id)
               print("Cam request sent!")
           if(CAMERA_ENABLED == False):
               self.signal_code_request.emit(card_id)
@@ -471,7 +491,7 @@ class NFCThread(QThread):
 class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     #MQTT signal definitions
-    signal_acces_req_done = QtCore.pyqtSignal(str, str, str, str, name='uid')
+    signal_acces_req_done = QtCore.pyqtSignal(str, str, str, str, name='acces_req_done')
     signal_activate_cam = QtCore.pyqtSignal(bool, name='cam_on')
 
     #Variables
@@ -492,6 +512,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.open_timer.timeout.connect(self.close_door)
         self.close_timer.timeout.connect(self.close_door)
         self.timer_cam.timeout.connect(self.cam_off)
+        self.timer_code.timeout.connect(self.change_tab_nfc)
 
         #Define an empty code on startup
         self.code = ""
@@ -515,6 +536,11 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pushButton_dig_9.clicked.connect(self.on_click_9)
 
     #PyQt5 slots
+
+    #Actions to perform when an NFC card is detected
+    def card_detected_actions(self):
+        self.label_statut_porte.setText("Carte detectée!")
+        self.code = ""
 
     #Sets a variable to say that we found a face via camera
     def face_found(self):
@@ -644,7 +670,6 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.toolBox.setCurrentIndex(1)
         self.nfc_uid = uid
         self.timer_cam.stop()
-        self.timer_code.timeout.connect(self.change_tab_nfc)
         self.timer_code.start(CODE_TIMEOUT*1000)
 
     #Function to change to the homescreen
@@ -700,19 +725,15 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                                      card_ok = True
 
                                      print("Acces Granted!")
-                                     GPIO.output(RELAY_PIN, GPIO.LOW)
-                                     self.label_statut_porte.setText("Porte ouverte! (Verification hors ligne)") 
-                                     self.open_timer.timeout.connect(self.close_door)
-                                     self.open_timer.start(5000)
+                                     self.acces_granted()
+                                     self.label_statut_porte.setText("Porte ouverte! (Verification hors ligne)")
                   else:
                       print("Checking next line...")
 
                   if(card_ok == False):
                                  print("Acces Denied")
-                                 GPIO.output(RELAY_PIN, GPIO.HIGH)
+                                 self.acces_denied()
                                  self.label_statut_porte.setText("Acces Interdit! (Verification hors ligne)") 
-                                 self.close_timer.timeout.connect(self.close_door)
-                                 self.close_timer.start(5000)
 
               saved_uid.close()
 
@@ -741,6 +762,9 @@ def main():
     nfc_thread.signal_denied.connect(MainWindow.acces_denied)
     nfc_thread.signal_acces_req.connect(MainWindow.change_tab_code)
     nfc_thread.signal_code_request.connect(MainWindow.change_tab_code)
+    nfc_thread.signal_activate_cam.connect(face_thread.activate_cam_fct)
+    nfc_thread.signal_change_tab_cam.connect(MainWindow.change_tab_cam)
+    nfc_thread.signal_card_detected.connect(MainWindow.card_detected_actions)
 
     #MQTT
     mqtt_thread.start()  # Finally starts the thread
@@ -758,8 +782,6 @@ def main():
 
     # Connect the signal from the thread to the finished method
     face_thread.signal_show_cam.connect(MainWindow.show_image)
-    nfc_thread.signal_activate_cam.connect(face_thread.activate_cam_fct)
-    nfc_thread.signal_tab_cam.connect(MainWindow.change_tab_cam)
     face_thread.signal_acces_req_done.connect(mqtt_thread.publish)
     face_thread.signal_face_found.connect(MainWindow.face_found)
 
