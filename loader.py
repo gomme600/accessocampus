@@ -1,3 +1,14 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+   NeOCampus Accessocampus client
+   Displays a fullscreen GUI and checks for NFC/face/code to allow the opening of a door/gate
+   Makes access requests via MQTT to the server side application
+   Supports local checking if the MQTT server doesn't respond
+   Author : Sebastian Lucas 2019-2020
+"""
+
 ##########################
 ##----USER SETTINGS----###
 ##########################
@@ -142,7 +153,8 @@ if(CAMERA_ENABLED == True):
 #############
 
 ######THREADS######
-
+##########################################################
+##########################################################
 #Face recognition Thread
 class FACEThread(QThread):
     #PyQT Signals
@@ -291,7 +303,8 @@ class FACEThread(QThread):
              img = cv2.resize(img, (320, 240))
              self.signal_show_cam.emit(img)
              self.cam_startup = self.cam_startup + 1
-
+##########################################################
+##########################################################
 #MQTT Thread
 class MQTTThread(QThread):
     #Define all of the signals
@@ -430,13 +443,11 @@ class MQTTThread(QThread):
        self.client.loop_forever()
        print("MQTT dead!")
        self.signal_dead.emit()
-
+##########################################################
+##########################################################
 #NFC Thread
 class NFCThread(QThread):
     #Signal definitions
-    signal_granted = pyqtSignal()
-    signal_denied = pyqtSignal()
-    signal_acces_req = pyqtSignal(str, name='acces_req')
     signal_code_request = pyqtSignal(str, name='code_req')
     signal_activate_cam = pyqtSignal(bool, str, name='cam_on')
     signal_change_tab_cam = pyqtSignal(str, name='cam_req')
@@ -483,9 +494,9 @@ class NFCThread(QThread):
               print("Code request signal sent!")
           #We sleep to avoid reading a card multiple times
           time.sleep(4)
-######
+##########################################################
 
-######
+##########################################################
 
 #MainWindow#
 class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
@@ -536,12 +547,8 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pushButton_dig_9.clicked.connect(self.on_click_9)
 
     #PyQt5 slots
-
-    #Actions to perform when an NFC card is detected
-    def card_detected_actions(self):
-        self.label_statut_porte.setText("Carte detectée!")
-        self.code = ""
-
+    ##########################################################
+    #Face detection
     #Sets a variable to say that we found a face via camera
     def face_found(self):
         self.face_detected = True
@@ -555,7 +562,81 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.image = image
         self.image = QtGui.QImage(self.image.data, self.image.shape[1], self.image.shape[0], QtGui.QImage.Format_RGB888).rgbSwapped()
         self.label_cam_img.setPixmap(QtGui.QPixmap.fromImage(self.image))
+        
+    #Function to turn the camera off
+    def cam_off(self):
+        print("Requesting to turn cam off")
+        self.signal_activate_cam.emit(False)
+        self.timer_cam.stop()
+        self.toolBox.setCurrentIndex(0)
+        if(self.face_detected == False):
+            self.change_tab_code(self.nfc_uid)
+        if(self.face_detected == True):
+            self.change_tab_nfc()
+        self.face_detected = False
+    ##########################################################
+    ##########################################################
+    #DOOR CONTROL
+    #Function for when acces is granted
+    def acces_granted(self):
+        print("acces_granted")
+        self.open_door()
 
+    #Function for when acces is denied
+    def acces_denied(self):
+        print("acces_denied")
+        GPIO.output(RELAY_PIN, GPIO.HIGH)
+        self.label_statut_porte.setText("Acces Interdit!")
+        self.close_timer.start(OPEN_TIME*1000)
+        self.change_tab_nfc()
+
+    #Function to close the door
+    def close_door(self):
+        print("Close door")
+        GPIO.output(RELAY_PIN, GPIO.HIGH)
+        self.label_statut_porte.setText("Porte fermée")
+        self.open_timer.stop()
+        self.close_timer.stop()
+        self.change_tab_nfc()
+
+    #Function to open the door
+    def open_door(self):
+        print("Opening door!")
+        GPIO.output(RELAY_PIN, GPIO.LOW)
+        self.label_statut_porte.setText("Porte ouverte")
+        self.open_timer.start(OPEN_TIME*1000)
+        self.change_tab_nfc()
+    ##########################################################
+    ##########################################################
+    #TAB CONTROL
+    #Function to change to the code entry screen
+    def change_tab_code(self, uid):
+        self.toolBox.setCurrentIndex(1)
+        self.nfc_uid = uid
+        self.timer_cam.stop()
+        self.timer_code.start(CODE_TIMEOUT*1000)
+
+    #Function to change to the homescreen
+    def change_tab_nfc(self):
+        self.toolBox.setCurrentIndex(0)
+        self.code = ""
+
+    #Function to change to the camera screen
+    def change_tab_cam(self, uid):
+        print("Changing to cam tab and setting up timer")
+        self.toolBox.setCurrentIndex(2)
+        self.timer_cam.start(CAMERA_TIMEOUT*1000)
+        self.nfc_uid = uid
+    ##########################################################
+    ##########################################################
+    #NFC
+    #Actions to perform when an NFC card is detected
+    def card_detected_actions(self):
+        self.label_statut_porte.setText("Carte detectée!")
+        self.code = ""
+    ##########################################################
+    ##########################################################
+    #BUTTONS
     #Actions to perform when the validate button is clicked
     def on_click_val(self):
         #Sets us back to the homepage
@@ -634,68 +715,9 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.code = self.code + "9"
         self.label_statut_porte.setText(self.code)
         self.timer_code.stop()
-
-    #Function for when acces is granted
-    def acces_granted(self):
-        print("acces_granted")
-        self.open_door()
-
-    #Function for when acces is denied
-    def acces_denied(self):
-        print("acces_denied")
-        GPIO.output(RELAY_PIN, GPIO.HIGH)
-        self.label_statut_porte.setText("Acces Interdit!")
-        self.close_timer.start(OPEN_TIME*1000)
-        self.change_tab_nfc()
-
-    #Function to close the door
-    def close_door(self):
-        print("Close door")
-        GPIO.output(RELAY_PIN, GPIO.HIGH)
-        self.label_statut_porte.setText("Porte fermée")
-        self.open_timer.stop()
-        self.close_timer.stop()
-        self.change_tab_nfc()
-
-    #Function to open the door
-    def open_door(self):
-        print("Opening door!")
-        GPIO.output(RELAY_PIN, GPIO.LOW)
-        self.label_statut_porte.setText("Porte ouverte")
-        self.open_timer.start(OPEN_TIME*1000)
-        self.change_tab_nfc()
-
-    #Function to change to the code entry screen
-    def change_tab_code(self, uid):
-        self.toolBox.setCurrentIndex(1)
-        self.nfc_uid = uid
-        self.timer_cam.stop()
-        self.timer_code.start(CODE_TIMEOUT*1000)
-
-    #Function to change to the homescreen
-    def change_tab_nfc(self):
-        self.toolBox.setCurrentIndex(0)
-        self.code = ""
-
-    #Function to turn the camera off
-    def cam_off(self):
-        print("Requesting to turn cam off")
-        self.signal_activate_cam.emit(False)
-        self.timer_cam.stop()
-        self.toolBox.setCurrentIndex(0)
-        if(self.face_detected == False):
-            self.change_tab_code(self.nfc_uid)
-        if(self.face_detected == True):
-            self.change_tab_nfc()
-        self.face_detected = False
-
-    #Function to change to the camera screen
-    def change_tab_cam(self, uid):
-        print("Changing to cam tab and setting up timer")
-        self.toolBox.setCurrentIndex(2)
-        self.timer_cam.start(CAMERA_TIMEOUT*1000)
-        self.nfc_uid = uid
-
+    ##########################################################
+    ##########################################################
+    #OTHER
     #Function to check id locally
     def local_check(self, uid, code):
               ID = DOOR_ID
@@ -736,8 +758,9 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                                  self.label_statut_porte.setText("Acces Interdit! (Verification hors ligne)") 
 
               saved_uid.close()
-
-
+    ##########################################################
+    ##########################################################
+    
 def main():
     #Define the app window
     app = QtWidgets.QApplication(sys.argv)
@@ -758,9 +781,6 @@ def main():
     nfc_thread.start()  # Finally starts the thread
 
     # Connect the signal from the thread to the finished method
-    nfc_thread.signal_granted.connect(MainWindow.acces_granted)
-    nfc_thread.signal_denied.connect(MainWindow.acces_denied)
-    nfc_thread.signal_acces_req.connect(MainWindow.change_tab_code)
     nfc_thread.signal_code_request.connect(MainWindow.change_tab_code)
     nfc_thread.signal_activate_cam.connect(face_thread.activate_cam_fct)
     nfc_thread.signal_change_tab_cam.connect(MainWindow.change_tab_cam)
