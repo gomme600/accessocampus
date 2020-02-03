@@ -83,8 +83,8 @@ def on_message(client, userdata, message):
       print("We loaded the JSON data!")
       #We load the data from the dictionary using the keys
 
-      if(True):
-      #if ( ("door_id" in inData) & ("auth_type" in inData) ("nfc_uid" in inData) ("passcode" in inData) ("image" in inData) ):
+      #if(True):
+      if ( ("door_id" in inData) & ("auth_type" in inData) & ("nfc_uid" in inData) & ("passcode" in inData) & ("image" in inData) ):
               
               print("Format correct!")
               ID = str(inData["door_id"])
@@ -123,6 +123,8 @@ def on_message(client, userdata, message):
                 card_ok = False
                 has_cards = False
 
+                saved_uid  = open("cards.conf", "r")
+
                 if("---new card---" in saved_uid.read()):
                   has_cards = True
                   print("Loaded saved cards!") 
@@ -156,27 +158,72 @@ def on_message(client, userdata, message):
 
                 saved_uid.close()
 
+              def check_uid():
+                card_ok = False 
+                has_cards = False
+
+                saved_uid  = open("cards.conf", "r")
+
+                if("---new card---" in saved_uid.read()):
+                  has_cards = True
+                  print("Loaded saved cards!") 
+                else:  
+                  print("No saved cards!")
+
+                saved_uid.close()
+                saved_uid  = open("cards.conf", "r")
+
+                for line in saved_uid:
+                  print(line)
+                  if("---new card---" in line):
+                      if(has_cards == True):
+                         if("#DOOR_ID:" + ID + "#" in line):
+                             if("#CARD_UID:" + uid + "#" in line):
+                                     card_ok = True
+
+                                     print("uid ok!")
+                                     return True
+                  else:
+                      print("Checking next line...")
+
+                  if(card_ok == False):
+                                 print("Wrong uid!")
+                                 return False
+
+
               if(auth_type == "cam"):
-                if(face_detection_results[0] == True):
+                uid_ok = check_uid()
+                if((face_detection_results[0] == True) & (uid_ok == True)):
                   print("Acces Granted via cam no thermal!")
                   mqtt_payload = {"door_id": ID, "command": "granted"}
                   client.publish(MQTT_auth_topic, json.dumps(mqtt_payload))
                   print("Signal emitted!")
-                else:
+                if((face_detection_results[0] == False) & (uid_ok == True)):
                   print("Ask code via cam no thermal!")
                   mqtt_payload = {"door_id": ID, "command": "ask_code"}
                   client.publish(MQTT_auth_topic, json.dumps(mqtt_payload))
                   print("Signal emitted!")
+                if(uid_ok == False):
+                  print("Acces Denied via NFC, invalid badge!")
+                  mqtt_payload = {"door_id": ID, "command": "denied"}
+                  client.publish(MQTT_auth_topic, json.dumps(mqtt_payload))
+                  print("Signal emitted!")
 
               if((auth_type == "cam+thermal") & (thermal_detected == "True")):
-                if(face_detection_results[0] == True):
+                uid_ok = check_uid()
+                if((face_detection_results[0] == True) & (uid_ok == True)):
                   print("Acces Granted via cam thermal!")
                   mqtt_payload = {"door_id": ID, "command": "granted"}
                   client.publish(MQTT_auth_topic, json.dumps(mqtt_payload))
                   print("Signal emitted!")
-                else:
+                if((face_detection_results[0] == False) & (thermal_detected == "True") & (uid_ok == True)):
                   print("Ask code via cam thermal!")
                   mqtt_payload = {"door_id": ID, "command": "ask_code"}
+                  client.publish(MQTT_auth_topic, json.dumps(mqtt_payload))
+                  print("Signal emitted!")
+                if(uid_ok == False):
+                  print("Acces Denied via NFC, invalid badge!")
+                  mqtt_payload = {"door_id": ID, "command": "denied"}
                   client.publish(MQTT_auth_topic, json.dumps(mqtt_payload))
                   print("Signal emitted!")
 
