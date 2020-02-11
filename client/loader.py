@@ -68,6 +68,12 @@ QTCREATOR_FILE  = "GUI.ui"
 #Number of times we have to detect a face before sending the photo
 FACE_DETECTION_THRESHOLD = 10
 
+#Display rectangle around detected face
+FACE_DISPLAY = False
+
+#Display circle around thermal detection zone
+THERMAL_DISPLAY = False
+
 ##########################
 ##----END  SETTINGS----###
 ##########################
@@ -173,6 +179,8 @@ class FACEThread(QThread):
         self.cam_startup = 0
         self.lepton_timed_out = False
         self.THERMAL_CAM = THERMAL_CAM
+        self.lepton_error_count = 0
+        self.old_a = np.zeros((60,80), np.uint8)
 
     def activate_cam_fct(self, cam_on, uid=None):
         print("Camera on/off: ")
@@ -207,12 +215,25 @@ class FACEThread(QThread):
              #Lepton thermal camera
              #Capture a frame
              a,_ = l.capture(None, False, False, False)
+             print("Frame number: ", _)
+             print("Line 20: ", a[20, 0].byteswap(True) & 0xFF0F)
 
-             if((a[20, 0] & 0xFF0F) != 0x1400):
-                 print("Lepton error, disabeling!")
-                 self.THERMAL_CAM = False
-
+             #Lepton error checking, if the camera disconnects we disable it
+             if((a[20, 0].byteswap(True) & 0xFF0F) == [0]):
+                 print("Lepton error!")
+                 self.lepton_error_count = self.lepton_error_count + 1
+                 #We reuse the old frame to avoid false detections
+                 a = self.old_a
+                 if(self.lepton_error_count > 8):
+                     print("Lepton error, disabeling!")
+                     self.THERMAL_CAM = False
              else:
+                 self.lepton_error_count = 0
+
+             #Stores the current frame for next cycle
+             self.old_a = a
+
+             if(self.THERMAL_CAM == True):
                  cv2.normalize(a, a, 0, 65535, cv2.NORM_MINMAX) # extend contrast
                  np.right_shift(a, 8, a) # fit data into 8 bits
 
@@ -221,7 +242,8 @@ class FACEThread(QThread):
                  #after performing a GaussianBlur to be more precise
                  a = cv2.GaussianBlur(a, (41, 41), 0)
                  (minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(a)
-                 cv2.circle(a, ((maxLoc[0]+THERMAL_OFFSET_X),(maxLoc[1]+THERMAL_OFFSET_Y)), 10, (0, 0, 204), 2)
+                 if(THERMAL_DISPLAY == True):
+                     cv2.circle(a, ((maxLoc[0]+THERMAL_OFFSET_X),(maxLoc[1]+THERMAL_OFFSET_Y)), 10, (0, 0, 204), 2)
                  #Resize the thermal image to a better size
                  a = cv2.resize(a, (320, 240))
 
@@ -238,7 +260,8 @@ class FACEThread(QThread):
           # Draw rectangle around the faces
           for (x, y, w, h) in faces:
             #Draw the rectangle, SCALE_FACTOR adjusts the rectangle to the chosen display resolution
-            cv2.rectangle(img, (SCALE_FACTOR*x, SCALE_FACTOR*y), (SCALE_FACTOR*x+SCALE_FACTOR*w, SCALE_FACTOR*y+SCALE_FACTOR*h), (255, 0, 0), 2)
+            if(FACE_DISPLAY == True):
+                cv2.rectangle(img, (SCALE_FACTOR*x, SCALE_FACTOR*y), (SCALE_FACTOR*x+SCALE_FACTOR*w, SCALE_FACTOR*y+SCALE_FACTOR*h), (255, 0, 0), 2)
             print("Found face!")
             print(faces)
             #Increment the face counter, this helps to stop false positifs
