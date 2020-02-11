@@ -114,9 +114,13 @@ except RuntimeError:
     print("Import Error! Check requirements.txt!")
 ##########################
 
+#######PROGRAM PATH#######
+cur_path = os.path.abspath(os.path.dirname(sys.argv[0]))
+##########################
+
 #########UI IMPORT########
 
-Ui_MainWindow, QtBaseClass = uic.loadUiType(QTCREATOR_FILE)
+Ui_MainWindow, QtBaseClass = uic.loadUiType(os.path.join(cur_path, QTCREATOR_FILE))
 
 ##########################
 
@@ -726,7 +730,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
               card_ok = False
               has_cards = False
 
-              saved_uid  = open("cards.conf", "r")
+              saved_uid  = open(os.path.join(cur_path, "cards.conf"), "r")
 
               if("---new card---" in saved_uid.read()):
                   has_cards = True
@@ -735,7 +739,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                   print("No saved cards!")
 
               saved_uid.close()
-              saved_uid  = open("cards.conf", "r")
+              saved_uid  = open(os.path.join(cur_path, "cards.conf"), "r")
 
               for line in saved_uid:
                   print(line)
