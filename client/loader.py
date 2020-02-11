@@ -370,6 +370,27 @@ class MQTTThread(QThread):
             self.mqtt_waiting = True
             self.mqtt_waiting_timer.start(MQTT_TIMEOUT*1000)
 
+    #On connect code
+    def on_connect(self, bus, obj, flags, rc):
+
+        if rc == 0:
+            self.signal_alive.emit()
+            print("MQTT connected!")
+        if rc == 1:
+            self.signal_dead.emit()
+            print("Incorrect MQTT protocol!")
+        if rc == 2:
+            self.signal_dead.emit()
+            print("MQTT client ID wrong!")
+        if rc == 3:
+            self.signal_dead.emit()
+            print("MQTT server not available!")
+        if rc == 4:
+            self.signal_dead.emit()
+            print("MQTT credentials wrong!")
+        if rc == 5:
+            self.signal_dead.emit()
+            print("MQTT connection refused!")
 
     #Outputs log messages and call-backs in the console
     def on_log(self, mqttc, obj, level, string):
@@ -425,6 +446,7 @@ class MQTTThread(QThread):
        self.client = mqtt.Client("P1") #create new instance
        self.client.on_message=self.on_message #attach function to callback
        self.client.on_log=self.on_log #attach logging to log callback
+       self.client.on_connect = self.on_connect #attach on connect to callback
 
        # Auth
        self.client.username_pw_set(username=MQTT_user,password=MQTT_password)
