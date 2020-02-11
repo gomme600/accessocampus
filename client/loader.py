@@ -171,6 +171,8 @@ class FACEThread(QThread):
         #Default values on startup
         self.activate_cam = False
         self.cam_startup = 0
+        self.lepton_timed_out = False
+        self.THERMAL_CAM = THERMAL_CAM
 
     def activate_cam_fct(self, cam_on, uid=None):
         print("Camera on/off: ")
@@ -183,6 +185,10 @@ class FACEThread(QThread):
         print("Camera on/off: ")
         print(False)
         self.activate_cam = False
+
+    def lepton_timeout(self):
+        print("Lepton capture timed out! Disabeling!")
+        self.lepton_timed_out = True
 
     # run method gets called when we start the thread
     def run(self):
@@ -197,21 +203,27 @@ class FACEThread(QThread):
        with Lepton() as l:
         while self.activate_cam == True:
 
-         if(THERMAL_CAM == True):
+         if(self.THERMAL_CAM == True):
              #Lepton thermal camera
              #Capture a frame
-             a,_ = l.capture()
-             cv2.normalize(a, a, 0, 65535, cv2.NORM_MINMAX) # extend contrast
-             np.right_shift(a, 8, a) # fit data into 8 bits
-    
-             # perform an attempt to find the (x, y) coordinates of
-             # the area of the image with the largest intensity value
-             #after performing a GaussianBlur to be more precise
-             a = cv2.GaussianBlur(a, (41, 41), 0)
-             (minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(a)
-             cv2.circle(a, ((maxLoc[0]+THERMAL_OFFSET_X),(maxLoc[1]+THERMAL_OFFSET_Y)), 10, (0, 0, 204), 2)
-             #Resize the thermal image to a better size
-             a = cv2.resize(a, (320, 240))
+             a,_ = l.capture(None, False, False, False)
+
+             if((a[20, 0] & 0xFF0F) != 0x1400):
+                 print("Lepton error, disabeling!")
+                 self.THERMAL_CAM = False
+
+             else:
+                 cv2.normalize(a, a, 0, 65535, cv2.NORM_MINMAX) # extend contrast
+                 np.right_shift(a, 8, a) # fit data into 8 bits
+
+                 # perform an attempt to find the (x, y) coordinates of
+                 # the area of the image with the largest intensity value
+                 #after performing a GaussianBlur to be more precise
+                 a = cv2.GaussianBlur(a, (41, 41), 0)
+                 (minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(a)
+                 cv2.circle(a, ((maxLoc[0]+THERMAL_OFFSET_X),(maxLoc[1]+THERMAL_OFFSET_Y)), 10, (0, 0, 204), 2)
+                 #Resize the thermal image to a better size
+                 a = cv2.resize(a, (320, 240))
 
          # take video frame
          ok, img = cam.read()
@@ -257,11 +269,12 @@ class FACEThread(QThread):
                 print("rectangle y: ", SCALE_FACTOR*y)
                 print("rectangle x+w: ", SCALE_FACTOR*x+SCALE_FACTOR*w)
                 print("rectangle y+h: ", SCALE_FACTOR*y+SCALE_FACTOR*h)
-                print("circle x: ", (2*SCALE_FACTOR)*(maxLoc[0]+0.1+THERMAL_OFFSET_X))
-                print("circle y: ", (2*SCALE_FACTOR)*(maxLoc[1]+0.1+THERMAL_OFFSET_Y))
+                if(self.THERMAL_CAM == True):
+                    print("circle x: ", (2*SCALE_FACTOR)*(maxLoc[0]+0.1+THERMAL_OFFSET_X))
+                    print("circle y: ", (2*SCALE_FACTOR)*(maxLoc[1]+0.1+THERMAL_OFFSET_Y))
 
                 #Thermal detection to check if it is a real person
-                if(THERMAL_CAM == True):
+                if(self.THERMAL_CAM == True):
                     #We use the scale factor*2 because the resolution of the thermal camera is half of the pi camera for detection (80x60px vs 160x120px)
                     if(((SCALE_FACTOR*x) <= ((2*SCALE_FACTOR)*(maxLoc[0]+0.1+THERMAL_OFFSET_X)) <= (SCALE_FACTOR*x+SCALE_FACTOR*w)) & ((SCALE_FACTOR*y) <= ((2*SCALE_FACTOR)*(maxLoc[1]+0.1+THERMAL_OFFSET_Y)) <= (SCALE_FACTOR*y+SCALE_FACTOR*h))):
                         print("Thermal max on face")
@@ -273,7 +286,7 @@ class FACEThread(QThread):
                     self.signal_acces_req_done.emit(self.card_uid, "0", jpg_as_text, "cam+thermal", thermal_detect) 
 
                 #Send all of the information including a photo but without thermal detect status to the MQTT handeler
-                if(THERMAL_CAM == False):
+                if(self.THERMAL_CAM == False):
                     self.signal_acces_req_done.emit(self.card_uid, "0", jpg_as_text, "cam", False)
 
                 #Display 'Traitement...' and turn off camera
@@ -289,7 +302,7 @@ class FACEThread(QThread):
              cv2.putText(img,'Demarrage...', (10,700), cv2.FONT_HERSHEY_SIMPLEX, 3, (255,255,255), 8)
 
          #If the thermal camera is present then overlay and display the images
-         if(THERMAL_CAM == True):
+         if(self.THERMAL_CAM == True):
                 
              a = cv2.resize(a, (320, 240))
              color = cv2.cvtColor(np.uint8(a), cv2.COLOR_GRAY2BGR)
@@ -303,7 +316,7 @@ class FACEThread(QThread):
              self.cam_startup = self.cam_startup + 1
 
          #If the thermal camera isn't present then display the camera by itself
-         if(THERMAL_CAM == False):
+         if(self.THERMAL_CAM == False):
              img = cv2.resize(img, (320, 240))
              self.signal_show_cam.emit(img)
              self.cam_startup = self.cam_startup + 1
