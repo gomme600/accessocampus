@@ -30,7 +30,7 @@ RELAY_PIN = 21
 OPEN_TIME = 5
 
 #Door ID - Type STR (can be anything. Ex: room number)
-DOOR_ID = "92"
+UNIT_ID = "92"
 
 #Code entry page timeout in seconds
 CODE_TIMEOUT = 10
@@ -354,6 +354,11 @@ class MQTTThread(QThread):
     signal_dead = pyqtSignal()
     signal_local_check = pyqtSignal(str, str, name='local_check')
     signal_code_request = pyqtSignal(str, name='code_req')
+    signal_force_open = pyqtSignal()
+    signal_force_close = pyqtSignal()
+    signal_normal_op = pyqtSignal()
+    signal_status_request = pyqtSignal()
+
 
     #Timeout timer
     mqtt_waiting_timer = QTimer()
@@ -402,7 +407,7 @@ class MQTTThread(QThread):
 
         #We publish the output string
         print("Publishing message to topic", MQTT_request_topic)
-        mqtt_payload = {"door_id": DOOR_ID, "auth_type": self.auth_type, "nfc_uid": self.uid, "passcode": self.code, "thermal_detect": self.thermal_detect, "image": self.image}
+        mqtt_payload = {"unit_id": UNIT_ID, "auth_type": self.auth_type, "nfc_uid": self.uid, "passcode": self.code, "thermal_detect": self.thermal_detect, "image": self.image}
         self.client.publish(MQTT_request_topic, json.dumps(mqtt_payload)) 
         print("MQTT request sent...")
         #We start waiting for a response
@@ -449,27 +454,43 @@ class MQTTThread(QThread):
         #We load the data from the dictionary using the keys
 
         #We check if the received message is in the correct format
-        if ( ("door_id" in inData) & ("command" in inData) ):
+        if ( ("unit_id" in inData) & ("command" in inData) ):
 
             #We check if the received message is for us
-            if( (str(inData["door_id"]) == DOOR_ID) | (str(inData["door_id"]) == "ALL") ):
+            if( (str(inData["unit_id"]) == UNIT_ID) | (str(inData["unit_id"]) == "ALL") ):
 
                 #Stop the timeout timer as we received a response (if it was running)
                 self.mqtt_waiting_timer.stop()
                 self.mqtt_waiting = False
                 
                 #Actions to perform based on what command we received
-                if(str(inData["command"]) == "granted"):
+                if(str(inData["command"]) == "grant"):
                     print("Acces Granted via MQTT!")
                     self.signal_granted.emit()
 
-                if(str(inData["command"]) == "denied"):
+                if(str(inData["command"]) == "deny"):
                     print("Acces Denied via MQTT!")
                     self.signal_denied.emit()
 
                 if(str(inData["command"]) == "ask_code"):
                     print("Code requested via MQTT!")
                     self.signal_code_request.emit(self.uid)
+
+                if(str(inData["command"]) == "force_open"):
+                    print("Asked to force open!")
+                    self.signal_force_open.emit()
+
+                if(str(inData["command"]) == "force_close"):
+                    print("Asked to force close!")
+                    self.signal_force_close.emit()
+
+                if(str(inData["command"]) == "normal"):
+                    print("Asked to resume normal operation!")
+                    self.signal_normal_op.emit()
+
+                if(str(inData["command"]) == "status"):
+                    print("Asked for status!")
+                    self.signal_status_request.emit()
 
     # run method gets called when we start the thread
     def run(self):
@@ -569,6 +590,8 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     #Variables
     face_detected = False
+    forced_closed = False
+    forced_open = False
 
     #Timers
     timer_cam = QTimer()
@@ -662,12 +685,55 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.change_tab_nfc()
 
     #Function to open the door
-    def open_door(self):
+    def open_door(self, infinite_open = False):
         print("Opening door!")
-        GPIO.output(RELAY_PIN, GPIO.LOW)
-        self.label_statut_porte.setText("Porte ouverte")
-        self.open_timer.start(OPEN_TIME*1000)
-        self.change_tab_nfc()
+        if((self.forced_open == False) and (infinite_open == False) and (self.forced_closed == False)):
+            GPIO.output(RELAY_PIN, GPIO.LOW)
+            self.label_statut_porte.setText("Porte ouverte")
+            self.open_timer.start(OPEN_TIME*1000)
+            self.change_tab_nfc()
+
+        if((self.forced_open == False) and (infinite_open == True) and (self.forced_closed == False)):
+            GPIO.output(RELAY_PIN, GPIO.LOW)
+            self.label_statut_porte.setText("Porte forcée ouverte")
+            self.change_tab_nfc()
+
+        if((self.forced_open == False) and self.forced_closed == True):
+            print("Door cannot be opened (set to force close)")
+            self.label_statut_porte.setText("Ouverture impossible! Porte desactivée!")
+            self.change_tab_nfc()
+
+        if((self.forced_open == False) and (infinite_open == True) and (self.forced_closed == True)):
+            GPIO.output(RELAY_PIN, GPIO.LOW)
+            self.label_statut_porte.setText("Porte réactivée!")
+            self.change_tab_nfc()
+
+        if(self.forced_open == True):
+            print("Porte deja forcee ouverte!")
+
+    def force_open(self):
+        if(self.forced_closed == True):
+            self.forced_closed = False
+        self.forced_open = True
+        self.open_door(True)
+
+    def force_close(self):
+        if(self.forced_open == True):
+            self.forced_open = False
+        self.forced_closed = True
+        self.close_door()
+
+    def normal_op(self):
+        if(self.forced_closed == True):
+            self.forced_closed = False
+
+        if(self.forced_open == True):
+            self.forced_open = False
+            self.close_door()
+
+    def status_request(self):
+        print("Status report is not implemented yet!")
+
     ##########################################################
     ##########################################################
     #TAB CONTROL
@@ -782,7 +848,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     #OTHER
     #Function to check id locally
     def local_check(self, uid, code):
-              ID = DOOR_ID
+              ID = UNIT_ID
               print("Checking local database!")
 
               card_ok = False
@@ -803,7 +869,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                   print(line)
                   if("---new card---" in line):
                       if(has_cards == True):
-                         if("#DOOR_ID:" + ID + "#" in line):
+                         if("#unit_id:" + ID + "#" in line):
                              if("#CARD_UID:" + uid + "#" in line):
                                  if("#PASSCODE:" + code + "#" in line):
                                      card_ok = True
@@ -858,6 +924,10 @@ def main():
     mqtt_thread.signal_dead.connect(nfc_thread.mqtt_dead)
     mqtt_thread.signal_local_check.connect(MainWindow.local_check)
     mqtt_thread.signal_code_request.connect(MainWindow.change_tab_code)
+    mqtt_thread.signal_force_open.connect(MainWindow.force_open)
+    mqtt_thread.signal_force_close.connect(MainWindow.force_close)
+    mqtt_thread.signal_normal_op.connect(MainWindow.normal_op)
+    mqtt_thread.signal_status_request.connect(MainWindow.status_request)
 
     #Face recognition
     face_thread.start()  # Finally starts the thread
