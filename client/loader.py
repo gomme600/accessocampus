@@ -135,9 +135,11 @@ Ui_MainWindow, QtBaseClass = uic.loadUiType(os.path.join(cur_path, QTCREATOR_FIL
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(RELAY_PIN, GPIO.OUT, initial=GPIO.HIGH)
 
-#NFC Setup###
-pn532 = Pn532_i2c()
-pn532.SAMconfigure()
+#Default Status#
+mqtt_status = "waiting"
+camera_status = "waiting"
+thermal_camera_status = "waiting"
+nfc_status = "waiting"
 
 ####Face recognition setup####
 if(CAMERA_ENABLED == True):
@@ -156,6 +158,9 @@ if(CAMERA_ENABLED == True):
 
     cam.set(cv2.CAP_PROP_FRAME_WIDTH, CAM_WIDTH)
     cam.set(cv2.CAP_PROP_FRAME_HEIGHT, CAM_HEIGHT)
+    camera_status = "OK"
+else:
+    camera_status = "off"
 
     #cam.set(cv2.CAP_PROP_BUFFERSIZE,1)
 ##############################
@@ -181,6 +186,7 @@ class FACEThread(QThread):
         self.THERMAL_CAM = THERMAL_CAM
         self.lepton_error_count = 0
         self.old_a = np.zeros((60,80), np.uint8)
+        self.thermal_camera_status = thermal_camera_status
 
     def activate_cam_fct(self, cam_on, uid=None):
         print("Camera on/off: ")
@@ -201,6 +207,9 @@ class FACEThread(QThread):
     # run method gets called when we start the thread
     def run(self):
 
+     global thermal_camera_status
+     global camera_status
+
      print("Camera Thread!")
      while CAMERA_ENABLED == True:
 
@@ -212,6 +221,7 @@ class FACEThread(QThread):
         while self.activate_cam == True:
 
          if(self.THERMAL_CAM == True):
+             thermal_camera_status = "OK"
              #Lepton thermal camera
              #Capture a frame
              a,_ = l.capture(None, False, False, False)
@@ -226,6 +236,7 @@ class FACEThread(QThread):
                  a = self.old_a
                  if(self.lepton_error_count > 8):
                      print("Lepton error, disabeling!")
+                     thermal_camera_status = "KO"
                      self.THERMAL_CAM = False
              else:
                  self.lepton_error_count = 0
@@ -359,12 +370,15 @@ class MQTTThread(QThread):
     signal_normal_op = pyqtSignal()
     signal_status_request = pyqtSignal()
 
-
-    #Timeout timer
-    mqtt_waiting_timer = QTimer()
+    global thermal_camera_status
+    global camera_status
+    global mqtt_status
+    global nfc_status
 
     def __init__(self):
         QThread.__init__(self)
+        #Timeout timer
+        self.mqtt_waiting_timer = QTimer()
         #Timer setup
         self.mqtt_waiting_timer.timeout.connect(self.timeout)
         #Waiting variable setup
@@ -405,22 +419,42 @@ class MQTTThread(QThread):
             self.image = list(image)
             self.thermal_detect = thermal_detect
 
-        #We publish the output string
-        print("Publishing message to topic", MQTT_request_topic)
-        mqtt_payload = {"unit_id": UNIT_ID, "auth_type": self.auth_type, "nfc_uid": self.uid, "passcode": self.code, "thermal_detect": self.thermal_detect, "image": self.image}
-        self.client.publish(MQTT_request_topic, json.dumps(mqtt_payload)) 
-        print("MQTT request sent...")
-        #We start waiting for a response
-        if(self.mqtt_waiting == False):
-            self.mqtt_waiting = True
-            self.mqtt_waiting_timer.start(MQTT_TIMEOUT*1000)
+        if(type == "status"):
+            self.thermal_status = thermal_camera_status
+            self.camera_status = camera_status
+            self.mqtt_status = mqtt_status
+            self.nfc_status = nfc_status
+
+        if((type == "code") or (type == "cam") or (type == "cam+thermal")):
+            #We publish the output string
+            print("Publishing message to topic", MQTT_request_topic)
+            self.seq_id = str(round(time.time()))
+            mqtt_payload = {"unit_id": UNIT_ID, "seq_id": self.seq_id, "auth_type": self.auth_type, "nfc_uid": self.uid, "passcode": self.code, "thermal_detect": self.thermal_detect, "image": self.image}
+            self.client.publish(MQTT_request_topic, json.dumps(mqtt_payload)) 
+            print("MQTT request sent...")
+            #We start waiting for a response
+            if(self.mqtt_waiting == False):
+                self.mqtt_waiting = True
+                self.mqtt_waiting_timer.start(MQTT_TIMEOUT*1000)
+
+        if(type == "status"):
+            #We publish the output string
+            print("Publishing message to topic", MQTT_request_topic)
+            mqtt_payload = {"mqtt_status": self.mqtt_status, "nfc_status": self.nfc_status, "camera_status": self.camera_status, "thermal_status": self.thermal_status}
+            self.client.publish(MQTT_request_topic, json.dumps(mqtt_payload))
+            print("MQTT request sent...")
 
     #On connect code
     def on_connect(self, bus, obj, flags, rc):
 
+        global mqtt_status
+
         if rc == 0:
             self.signal_alive.emit()
             print("MQTT connected!")
+            mqtt_status = "OK"
+        else:
+            self.mqtt_status = "KO"
         if rc == 1:
             self.signal_dead.emit()
             print("Incorrect MQTT protocol!")
@@ -463,16 +497,19 @@ class MQTTThread(QThread):
                 self.mqtt_waiting_timer.stop()
                 self.mqtt_waiting = False
                 
-                #Actions to perform based on what command we received
-                if(str(inData["command"]) == "grant"):
+                #Actions to perform based on what command we receive
+                print(str(inData["seq_id"]))
+                print(self.seq_id)
+                print(str(inData["seq_id"]) == self.seq_id)
+                if((str(inData["command"]) == "grant") and (str(inData["seq_id"]) == self.seq_id)):
                     print("Acces Granted via MQTT!")
                     self.signal_granted.emit()
 
-                if(str(inData["command"]) == "deny"):
+                if((str(inData["command"]) == "deny") and (str(inData["seq_id"]) == self.seq_id)):
                     print("Acces Denied via MQTT!")
                     self.signal_denied.emit()
 
-                if(str(inData["command"]) == "ask_code"):
+                if((str(inData["command"]) == "ask_code") and (str(inData["seq_id"]) == self.seq_id)):
                     print("Code requested via MQTT!")
                     self.signal_code_request.emit(self.uid)
 
@@ -546,12 +583,18 @@ class NFCThread(QThread):
 
     def __init__(self):
         QThread.__init__(self)
-        
+        self.nfc_status = nfc_status
 
     # run method gets called when we start the thread
     def run(self):
         
        print("NFC Thread!")
+       #NFC Setup###
+       global nfc_status
+       nfc_status = "KO"
+       pn532 = Pn532_i2c()
+       pn532.SAMconfigure()
+       nfc_status = "OK"
 
        while True:
           # Check if a card is available to read
@@ -696,6 +739,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if((self.forced_open == False) and (infinite_open == True) and (self.forced_closed == False)):
             GPIO.output(RELAY_PIN, GPIO.LOW)
             self.label_statut_porte.setText("Porte forcée ouverte")
+            self.forced_open = True
             self.change_tab_nfc()
 
         if((self.forced_open == False) and self.forced_closed == True):
@@ -714,7 +758,6 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def force_open(self):
         if(self.forced_closed == True):
             self.forced_closed = False
-        self.forced_open = True
         self.open_door(True)
 
     def force_close(self):
@@ -732,7 +775,8 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.close_door()
 
     def status_request(self):
-        print("Status report is not implemented yet!")
+        print("Sending status report!")
+        self.signal_acces_req_done.emit("0", "0", "0", "status")
 
     ##########################################################
     ##########################################################
