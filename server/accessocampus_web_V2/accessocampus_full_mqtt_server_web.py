@@ -90,10 +90,11 @@ def on_message(client, userdata, message):
       #We load the data from the dictionary using the keys
 
       #if(True):
-      if ( ("unit_id" in inData) & ("auth_type" in inData) & ("nfc_uid" in inData) & ("passcode" in inData) & ("image" in inData) ):
+      if ( ("unit_id" in inData) & ("seq_id" in inData) & ("auth_type" in inData) & ("nfc_uid" in inData) & ("passcode" in inData) & ("image" in inData) ):
               
               print("Format correct!")
               ID = str(inData["unit_id"])
+              seq_id = str(inData["seq_id"])
               uid = str(inData["nfc_uid"])
               code = str(inData["passcode"])
               image = np.asarray(inData["image"])
@@ -175,13 +176,13 @@ def on_message(client, userdata, message):
                 if(card_ok == False):
                     print("Acces Denied via code!")
                     state = "Acces Denied via code!"
-                    mqtt_payload = {"unit_id": ID, "command": "deny"}
+                    mqtt_payload = {"unit_id": ID, "seq_id": seq_id, "command": "deny"}
                     client.publish(MQTT_auth_topic, json.dumps(mqtt_payload))
                     print("Signal emitted!")
                 else:
                     print("Acces Granted via code!")
                     state = "Acces Granted via code!"
-                    mqtt_payload = {"unit_id": ID, "command": "grant"}
+                    mqtt_payload = {"unit_id": ID, "seq_id": seq_id, "command": "grant"}
                     client.publish(MQTT_auth_topic, json.dumps(mqtt_payload))
                     print("Signal emitted!")
 
@@ -226,19 +227,19 @@ def on_message(client, userdata, message):
                 if((face_detection_results[0] == True) & (uid_ok == True)):
                   print("Acces Granted via cam no thermal!")
                   state = "Acces Granted via cam no thermal!"
-                  mqtt_payload = {"unit_id": ID, "command": "grant"}
+                  mqtt_payload = {"unit_id": ID, "seq_id": seq_id, "command": "grant"}
                   client.publish(MQTT_auth_topic, json.dumps(mqtt_payload))
                   print("Signal emitted!")
                 if((face_detection_results[0] == False) & (uid_ok == True)):
                   print("Ask code via cam no thermal!")
                   state = "Ask code via cam no thermal!"
-                  mqtt_payload = {"unit_id": ID, "command": "ask_code"}
+                  mqtt_payload = {"unit_id": ID, "seq_id": seq_id, "command": "ask_code"}
                   client.publish(MQTT_auth_topic, json.dumps(mqtt_payload))
                   print("Signal emitted!")
                 if(uid_ok == False):
                   print("Acces Denied via NFC, invalid badge for this door or not in database!")
                   state = "Acces Denied via NFC, invalid badge for this door or not in database!"
-                  mqtt_payload = {"unit_id": ID, "command": "deny"}
+                  mqtt_payload = {"unit_id": ID, "seq_id": seq_id, "command": "deny"}
                   client.publish(MQTT_auth_topic, json.dumps(mqtt_payload))
                   print("Signal emitted!")
 
@@ -247,26 +248,26 @@ def on_message(client, userdata, message):
                 if((face_detection_results[0] == True) & (uid_ok == True)):
                   print("Acces Granted via cam thermal!")
                   state = "Acces Granted via cam thermal!"
-                  mqtt_payload = {"unit_id": ID, "command": "grant"}
+                  mqtt_payload = {"unit_id": ID, "seq_id": seq_id, "command": "grant"}
                   client.publish(MQTT_auth_topic, json.dumps(mqtt_payload))
                   print("Signal emitted!")
                 if((face_detection_results[0] == False) & (thermal_detected == "True") & (uid_ok == True)):
                   print("Ask code via cam thermal!")
                   state = "Ask code via cam thermal!"
-                  mqtt_payload = {"unit_id": ID, "command": "ask_code"}
+                  mqtt_payload = {"unit_id": ID, "seq_id": seq_id, "command": "ask_code"}
                   client.publish(MQTT_auth_topic, json.dumps(mqtt_payload))
                   print("Signal emitted!")
                 if(uid_ok == False):
                   print("Acces Denied via NFC, invalid badge for this door or not in database!")
                   state = "Acces Denied via NFC, invalid badge!"
-                  mqtt_payload = {"unit_id": ID, "command": "deny"}
+                  mqtt_payload = {"unit_id": ID, "seq_id": seq_id, "command": "deny"}
                   client.publish(MQTT_auth_topic, json.dumps(mqtt_payload))
                   print("Signal emitted!")
 
               if((auth_type == "cam+thermal") & (thermal_detected == "False")):
                   print("Acces Denied via cam thermal, break in attempt?!")
                   state = "Acces Denied via cam thermal, break in attempt?!"
-                  mqtt_payload = {"unit_id": ID, "command": "ask_code"}
+                  mqtt_payload = {"unit_id": ID, "seq_id": seq_id, "command": "ask_code"}
                   client.publish(MQTT_auth_topic, json.dumps(mqtt_payload))
                   print("Signal emitted!")
 
