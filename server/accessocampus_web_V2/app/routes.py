@@ -4,10 +4,30 @@ from flask_login import login_user, logout_user, current_user, login_required
 from werkzeug.urls import url_parse
 from app import app, db
 from app.forms import LoginForm, RegistrationForm, EditProfileForm, PostForm, \
-    ResetPasswordRequestForm, ResetPasswordForm, AddUidForm, RemoveUidForm
+    ResetPasswordRequestForm, ResetPasswordForm, AddUidForm, RemoveUidForm, CommandForm
 from app.models import User, Post, UID
 from app.email import send_password_reset_email
+import paho.mqtt.client as mqtt #import the mqtt client
+import time #Used for the timing
+import json #Used for converting to and from json strings
 
+##########################
+##----USER SETTINGS----###
+##########################
+
+#Connection variables, change as required
+MQTT_server = "neocampus.univ-tlse3.fr"
+MQTT_user = "test"
+MQTT_password = "test"
+#The MQTT topic where we find the weewx default loop topic: example: TestTopic/_meteo
+MQTT_topic = "TestTopic/req"
+
+#The MQTT topic to publish outdoor data into (weather station data)
+MQTT_auth_topic = "TestTopic/auth"
+
+##########################
+##----END  SETTINGS----###
+##########################
 
 @app.before_request
 def before_request():
@@ -28,6 +48,11 @@ def index():
 ##        flash('Command sent!')
 ##        return redirect(url_for('index'))
     form = AddUidForm()
+    form2 = RemoveUidForm()
+    form3 = CommandForm()
+
+    
+    
     if form.validate_on_submit():
         data = UID(uid=form.uid_submit.data, door=form.door_submit.data, name=form.name_submit.data)
         data.set_code(form.code_submit.data)
@@ -35,13 +60,45 @@ def index():
         db.session.commit()
         flash('Data added!')
         return redirect(url_for('index'))
-    form2 = RemoveUidForm()
+    
+    
     if form2.validate_on_submit():
         uid = UID.query.all()
         db.session.delete(uid[int(form2.ID_submit.data)-1])
         db.session.commit()
         flash('Data removed!')
         return redirect(url_for('index'))
+    
+    if form3.validate_on_submit():
+        flash('Command sent!')
+
+        #Get command and unit_ID
+        command = form3.command.data
+        if(form3.client_ID_submit.data != ""):
+            unit_ID = form3.client_ID_submit.data
+        else:
+            unit_ID = "ALL"
+        
+        #MQTT address
+        broker_address=MQTT_server
+        print("creating new instance")
+        client = mqtt.Client("P98") #create new instance
+
+        # Auth
+        client.username_pw_set(username=MQTT_user,password=MQTT_password)
+
+        # now we connect
+        print("connecting to broker")
+        client.connect(broker_address) #connect to broker
+
+        #Publish
+        mqtt_payload = {"unit_id": unit_ID, "command": command}
+        client.publish(MQTT_auth_topic, json.dumps(mqtt_payload))
+        print("Published!")
+                  
+        return redirect(url_for('index'))
+    
+    
     page = request.args.get('page', 1, type=int)
     posts = UID.query.order_by(UID.id.desc()).paginate(
         page, app.config['POSTS_PER_PAGE'], False)
@@ -49,7 +106,7 @@ def index():
         if posts.has_next else None
     prev_url = url_for('index', page=posts.prev_num) \
         if posts.has_prev else None
-    return render_template('index.html', title='Home', form=form, form2=form2,
+    return render_template('index.html', title='Home', form=form, form2=form2, form3=form3,
                            posts=posts.items, next_url=next_url,
                            prev_url=prev_url)
 

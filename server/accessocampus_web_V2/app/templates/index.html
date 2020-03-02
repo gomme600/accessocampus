@@ -11,6 +11,10 @@
     {{ wtf.quick_form(form2) }}
     <br>
     {% endif %}
+    {% if form3 %}
+    {{ wtf.quick_form(form3) }}
+    <br>
+    {% endif %}
     {% for post in posts %}
         {% include '_users.html' %}
     {% endfor %}

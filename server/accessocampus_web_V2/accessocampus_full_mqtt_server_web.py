@@ -270,18 +270,33 @@ def on_message(client, userdata, message):
                   mqtt_payload = {"unit_id": ID, "seq_id": seq_id, "command": "ask_code"}
                   client.publish(MQTT_auth_topic, json.dumps(mqtt_payload))
                   print("Signal emitted!")
+                  
+              #Logging
+              current_time = datetime.now().strftime("%H:%M:%S")
+              if((auth_type == "cam") or (auth_type == "cam+thermal")):
+                  p = Post(body=state + " at " + current_time + " with uid " + uid + ", Card holder: " + card_holder_name, author=User.query.get(1), image=received_image_B64)
+              else:
+                  p = Post(body=state + " at " + current_time + " with uid " + uid + ", Card holder: " + card_holder_name, author=User.query.get(1))
+              db.session.add(p)
+              db.session.commit()
 
       else:
-          print("Invalid MQTT message, aborting...")
-          state = "Invalid MQTT message, aborting..."
+          if(("mqtt_status" in inData) & ("nfc_status" in inData) & ("camera_status" in inData) & ("thermal_status" in inData)):
+              print("Received status message!")
+              #Logging
+              current_time = datetime.now().strftime("%H:%M:%S")
+              p = Post(body="Received status at " + current_time + " | MQTT Status: " + str(inData["mqtt_status"]) + " | NFC Status: " + str(inData["nfc_status"]) + " | Camera Status: " + str(inData["camera_status"]) + " | Thermal Camera Status: " + str(inData["thermal_status"]), author=User.query.get(1))
+              db.session.add(p)
+              db.session.commit()
+          else:
+              print("Invalid MQTT message, aborting...")
+              #Logging
+              current_time = datetime.now().strftime("%H:%M:%S")
+              p = Post(body="Received invalid MQTT message at " + current_time, author=User.query.get(1))
+              db.session.add(p)
+              db.session.commit()
           
-      current_time = datetime.now().strftime("%H:%M:%S")
-      if((auth_type == "cam") or (auth_type == "cam+thermal")):
-          p = Post(body=state + " at " + current_time + " with uid " + uid + ", Card holder: " + card_holder_name, author=User.query.get(1), image=received_image_B64)
-      else:
-          p = Post(body=state + " at " + current_time + " with uid " + uid + ", Card holder: " + card_holder_name, author=User.query.get(1))
-      db.session.add(p)
-      db.session.commit()
+      
 
 #Start of the MQTT subscribing
 ########################################

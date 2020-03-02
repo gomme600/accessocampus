@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, BooleanField, SubmitField, \
+from wtforms import StringField, PasswordField, BooleanField, SubmitField, RadioField, \
     TextAreaField
 from wtforms.validators import ValidationError, DataRequired, Email, EqualTo, \
     Length
@@ -64,6 +64,11 @@ class PostForm(FlaskForm):
     post = TextAreaField('Say something', validators=[DataRequired()])
     submit = SubmitField('Submit')
 
+class CommandForm(FlaskForm):
+    client_ID_submit = StringField('Door/Gate ID (leave blank for all)')
+    command = RadioField("", choices=[('force_open', 'Force Open'), ('force_close', 'Force Close'), ('normal', 'Return to normal'), ('status', 'Get status in log')], default='normal')
+    submit = SubmitField('SendCommand')
+
 class AddUidForm(FlaskForm):
     uid_submit = StringField('UID', validators=[DataRequired()])
     door_submit = StringField('Door', validators=[DataRequired()])
@@ -74,3 +79,5 @@ class AddUidForm(FlaskForm):
 class RemoveUidForm(FlaskForm):
     ID_submit = StringField('User ID', validators=[DataRequired()])
     submit = SubmitField('Remove')
+
+
