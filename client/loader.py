@@ -493,10 +493,11 @@ class MQTTThread(QThread):
             #We check if the received message is for us
             if( (str(inData["unit_id"]) == UNIT_ID) | (str(inData["unit_id"]) == "ALL") ):
 
-                #Stop the timeout timer as we received a response (if it was running)
-                self.mqtt_waiting_timer.stop()
-                self.mqtt_waiting = False
-                
+              #Stop the timeout timer as we received a response (if it was running)
+              self.mqtt_waiting_timer.stop()
+              self.mqtt_waiting = False
+              
+              if("seq_id" in inData):  
                 #Actions to perform based on what command we receive
                 print(str(inData["seq_id"]))
                 print(self.seq_id)
@@ -512,6 +513,7 @@ class MQTTThread(QThread):
                 if((str(inData["command"]) == "ask_code") and (str(inData["seq_id"]) == self.seq_id)):
                     print("Code requested via MQTT!")
                     self.signal_code_request.emit(self.uid)
+              else:
 
                 if(str(inData["command"]) == "force_open"):
                     print("Asked to force open!")
