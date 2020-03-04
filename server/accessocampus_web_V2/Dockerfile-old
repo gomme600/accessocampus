@@ -1,0 +1,31 @@
+FROM debian:latest
+
+# set a directory for the app
+WORKDIR /usr/src/app
+
+# copy all the files to the container
+COPY . .
+
+# install
+RUN apt-get update && apt-get install -y \
+    python3-pip \
+    python3 \
+    cmake \
+    libcairo2-dev \
+    pkg-config \
+    python3-dev \
+    libgirepository1.0-dev \
+    python3-flask
+    
+
+# install dependencies
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# tell the port number the container should expose
+EXPOSE 5000
+
+# run the command
+ENV FLASK_APP="microblog.py"
+
+# run the command
+CMD ["flask run"]

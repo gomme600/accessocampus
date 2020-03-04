@@ -1,27 +1,53 @@
-FROM debian:latest
+FROM python:3.6-alpine
 
-# set a directory for the app
-WORKDIR /usr/src/app
 
-# copy all the files to the container
-COPY . .
+
+RUN adduser -D microblog
+
+
+
+WORKDIR /home/microblog
+
+
+
+COPY requirements.txt requirements.txt
 
 # install
-RUN apt-get update && apt-get install -y \
-    python3-pyqt5 \
-    python3-pip \
-    python3 \
-    cmake
-    
+RUN apk update && apk add  \
+    cmake \
+    gcc
 
-# install dependencies
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN python -m venv venv
 
-# tell the port number the container should expose
+RUN venv/bin/pip install -r requirements.txt
+
+RUN venv/bin/pip install gunicorn
+
+
+COPY app app
+
+COPY faces faces
+
+COPY migrations migrations
+
+COPY microblog.py cards.conf app.db config.py boot.sh ./
+
+RUN chmod +x boot.sh
+
+
+
+ENV FLASK_APP microblog.py
+
+
+
+RUN chown -R microblog:microblog ./
+
+USER microblog
+
+
+
 EXPOSE 5000
 
-# run the command
-CMD ["export FLASK_APP=microblog.py"]
+ENTRYPOINT ["./boot.sh"]
 
-# run the command
-CMD ["flask run"]
+
