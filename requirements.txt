@@ -43,11 +43,11 @@ Werkzeug==0.14.1
 WTForms==2.1
 
 # requirements for the client
-lepton==1.0
+#lepton==1.0
 opencv-contrib-python==4.1.0.25
 paho-mqtt==1.5.0
 pkg-resources==0.0.0
-pylepton==0.1.2
+#pylepton==0.1.2
 RPi.GPIO==0.7.0
 
 # requirements for Heroku

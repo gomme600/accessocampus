@@ -22,7 +22,7 @@ RUN venv/bin/pip install gunicorn pymysql
 COPY app app
 COPY migrations migrations
 COPY faces faces
-COPY microblog.py accessocampus_full_mqtt_server_web.py config.py boot.sh ./
+COPY app.db microblog.py accessocampus_full_mqtt_server_web.py config.py boot.sh ./
 RUN chmod a+x boot.sh
 
 ENV FLASK_APP microblog.py
