@@ -7,7 +7,7 @@ WORKDIR /home/accessocampus
 
 RUN apt-get update
 
-RUN apt-get install -y python3-dev python3-pip python3-dev python3-venv
+RUN apt-get install -y python3-dev python3-pip python3-dev python3-venv git
 
 ENV LIBRARY_PATH=/lib:/usr/lib
 
