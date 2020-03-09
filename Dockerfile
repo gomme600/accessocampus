@@ -16,13 +16,19 @@ RUN python3 -m pip install -U --force-reinstall pip
 RUN apt-get install -y make automake gcc g++ subversion cmake
 
 COPY requirements.txt requirements.txt
-RUN python3 -m venv venv
-RUN venv/bin/pip3 install wheel
-RUN venv/bin/pip3 install -r requirements.txt
-RUN venv/bin/pip3 install gunicorn pymysql
+#RUN python3 -m venv venv
+#RUN venv/bin/pip3 install wheel
+#RUN venv/bin/pip3 install -r requirements.txt
+#RUN venv/bin/pip3 install gunicorn pymysql
+
+RUN pip3 install wheel
+RUN pip3 install -r requirements.txt
+RUN pip3 install gunicorn pymysql
 
 RUN git clone https://github.com/gomme600/pylepton.git
-RUN venv/bin/python3 pylepton/setup.py install
+WORKDIR /home/accessocampus/pylepton
+RUN python3 setup.py install
+WORKDIR /home/accessocampus
 
 COPY client client
 COPY server server
@@ -37,3 +43,4 @@ USER accessocampus
 
 EXPOSE 5000
 ENTRYPOINT ["./boot.sh"]
+CMD [" --server"]
