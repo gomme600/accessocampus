@@ -39,8 +39,8 @@ RUN chmod a+x deploy-tests.sh
 ENV FLASK_APP microblog.py
 
 #RUN chown -R microblog:microblog ./
-USER accessocampus
+#USER accessocampus
 
 EXPOSE 5000
 ENTRYPOINT ["./boot.sh"]
-CMD [" --server"]
+CMD [" "]
