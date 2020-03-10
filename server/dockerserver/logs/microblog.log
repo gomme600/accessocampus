@@ -118,3 +118,5 @@ WHERE user.username = ?
  LIMIT ? OFFSET ?]
 [parameters: ('a', 1, 0)]
 (Background on this error at: http://sqlalche.me/e/e3q8)
+2020-03-10 10:24:17,498 INFO: Microblog startup [in /nfs/home/sebastian/accessocampus/server/dockerserver/app/__init__.py:47]
+2020-03-10 10:24:29,044 INFO: Microblog startup [in /nfs/home/sebastian/accessocampus/server/dockerserver/app/__init__.py:47]
