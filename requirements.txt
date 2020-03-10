@@ -4,7 +4,8 @@ Babel==2.5.1
 blinker==1.4
 face-recognition==1.2.3
 face-recognition-models==0.3.0
-numpy==1.18.1
+numpy==1.18.1; platform_machine == 'x86_64'
+numpy==1.18.1; platform_machine == 'x86'
 paho-mqtt==1.5.0
 certifi==2017.7.27.1
 chardet==3.0.4
@@ -43,8 +44,9 @@ Werkzeug==0.14.1
 WTForms==2.1
 
 # requirements for the client
-lepton==1.0; platform_machine == 'arm'
-opencv-contrib-python==4.1.0.25
+lepton==1.0; platform_machine == 'armv7l'
+opencv-contrib-python==4.1.0.25; platform_machine == 'x86_64'
+opencv-contrib-python==4.1.0.25; platform_machine == 'x86'
 paho-mqtt==1.5.0
 #pylepton==0.1.2
 RPi.GPIO==0.7.0

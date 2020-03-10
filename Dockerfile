@@ -22,6 +22,7 @@ COPY requirements.txt requirements.txt
 #RUN venv/bin/pip3 install gunicorn pymysql
 
 RUN pip3 install wheel
+RUN pip3 install --extra-index-url=https://www.piwheels.org/simple opencv-contrib-python==4.1.0.25
 RUN pip3 install -r requirements.txt
 RUN pip3 install gunicorn pymysql
 
