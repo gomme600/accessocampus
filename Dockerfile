@@ -15,7 +15,7 @@ RUN python3 -m pip install -U --force-reinstall pip
 
 RUN apt-get install -y make automake gcc g++ subversion cmake
 
-RUN apt-get install libtiff5-dev zlib1g-dev libfreetype6-dev liblcms2-dev libwebp-dev libharfbuzz-dev libfribidi-dev tcl8.6-dev tk8.6-dev python-tk
+RUN apt-get install -y libtiff5-dev zlib1g-dev libfreetype6-dev liblcms2-dev libwebp-dev libharfbuzz-dev libfribidi-dev tcl8.6-dev tk8.6-dev python-tk
 
 COPY requirements.txt requirements.txt
 #RUN python3 -m venv venv
