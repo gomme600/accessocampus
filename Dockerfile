@@ -41,6 +41,8 @@ ENV FLASK_APP microblog.py
 #RUN chown -R microblog:microblog ./
 #USER accessocampus
 
+RUN apt-get install -y libsm6 libxext6 libxrender-dev python3-pyqt5
+
 EXPOSE 5000
 ENTRYPOINT ["./boot.sh"]
 CMD [" "]
