@@ -28,6 +28,8 @@ RUN pip3 install --extra-index-url=https://www.piwheels.org/simple opencv-contri
 RUN pip3 install -r requirements.txt
 RUN pip3 install gunicorn pymysql
 
+RUN apt-get install -y libatlas-base-dev
+
 RUN git clone https://github.com/gomme600/pylepton.git
 WORKDIR /home/accessocampus/pylepton
 RUN python3 setup.py install

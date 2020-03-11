@@ -44,7 +44,7 @@ Werkzeug==0.14.1
 WTForms==2.1
 
 # requirements for the client
-lepton==1.0; platform_machine == 'armv7l'
+#lepton==1.0; platform_machine == 'armv7l'
 opencv-contrib-python==4.1.0.25; platform_machine == 'x86_64'
 opencv-contrib-python==4.1.0.25; platform_machine == 'x86'
 paho-mqtt==1.5.0
