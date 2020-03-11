@@ -28,7 +28,16 @@ RUN pip3 install --extra-index-url=https://www.piwheels.org/simple opencv-contri
 RUN pip3 install -r requirements.txt
 RUN pip3 install gunicorn pymysql
 
-RUN apt-get install -y libatlas-base-dev
+RUN apt-get install -y libatlas-base-dev libqtgui4 libqt4-test
+
+RUN wget http://ftp.br.debian.org/debian/pool/main/j/jasper/libjasper-dev_1.900.1-debian1-2.4+deb8u3_armhf.deb
+RUN wget http://ftp.br.debian.org/debian/pool/main/j/jasper/libjasper1_1.900.1-debian1-2.4+deb8u3_armhf.deb
+RUN wget http://ftp.br.debian.org/debian/pool/main/g/glibc/multiarch-support_2.19-18+deb8u10_armhf.deb
+RUN dpkg -i multiarch-support_2.19-18+deb8u10_armhf.deb
+RUN dpkg -i libjasper1_1.900.1-debian1-2.4+deb8u3_armhf.deb
+RUN dpkg -i libjasper-dev_1.900.1-debian1-2.4+deb8u3_armhf.deb
+
+pip3 install --extra-index-url=https://www.piwheels.org/simple opencv-contrib-python==3.4.3.18
 
 RUN git clone https://github.com/gomme600/pylepton.git
 WORKDIR /home/accessocampus/pylepton
