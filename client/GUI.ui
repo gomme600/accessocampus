@@ -101,6 +101,19 @@
        <bool>true</bool>
       </property>
      </widget>
+     <widget class="QPushButton" name="code_button">
+      <property name="geometry">
+       <rect>
+        <x>600</x>
+        <y>210</y>
+        <width>181</width>
+        <height>41</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Entrez Code</string>
+      </property>
+     </widget>
     </widget>
     <widget class="QWidget" name="page_2">
      <property name="geometry">
