@@ -10,7 +10,7 @@
 """
 
 ##########################
-##----USER SETTINGS----###
+##-LEGACY USER SETTINGS###
 ##########################
 
 #Connection variables, change as required
@@ -88,6 +88,7 @@ try:
 #Basic imports
  import time
  import sys
+ import subprocess
 
 #CV2 and Lepton thermal camera
  import cv2
@@ -129,6 +130,82 @@ cur_path = os.path.abspath(os.path.dirname(sys.argv[0]))
 Ui_MainWindow, QtBaseClass = uic.loadUiType(os.path.join(cur_path, QTCREATOR_FILE))
 
 ##########################
+
+##########################
+#LOAD SETTINGS
+##########################
+import configparser
+config = configparser.ConfigParser()
+try:
+  config.read('settings.ini')
+  print("Loaded settings.ini !")
+  try:
+    if('MQTT' in config):
+        MQTT_server = config['MQTT'].get('MQTT_server', MQTT_server)
+        MQTT_user = config['MQTT'].get('MQTT_user', MQTT_user)
+        MQTT_password = config['MQTT'].get('MQTT_password', MQTT_password)
+        MQTT_auth_topic = config['MQTT'].get('MQTT_auth_topic', MQTT_auth_topic)
+        MQTT_request_topic = config['MQTT'].get('MQTT_request_topic', MQTT_request_topic)
+        print("MQTT settings loaded from ini !")
+  except:
+    print("Failed to load MQTT settings from ini !")
+
+  try:
+    if('PINS' in config):
+        RELAY_PIN = int(config['PINS'].get('RELAY_PIN', RELAY_PIN))
+        print("PIN settings loaded from ini !")
+  except:
+    print("Failed to load PIN settings from ini !")
+
+  try:
+    if('TIME' in config):
+        OPEN_TIME = int(config['TIME'].get('OPEN_TIME', OPEN_TIME))
+        CODE_TIMEOUT = int(config['TIME'].get('CODE_TIMEOUT', CODE_TIMEOUT))
+        MQTT_TIMEOUT = int(config['TIME'].get('MQTT_TIMEOUT', MQTT_TIMEOUT))
+        CAMERA_TIMEOUT = int(config['TIME'].get('CAMERA_TIMEOUT', CAMERA_TIMEOUT))
+        print("TIME settings loaded from ini !")
+  except:
+    print("Failed to load TIME settings from ini !")
+
+  try:
+    if('ID' in config):
+        UNIT_ID = config['ID'].get('UNIT_ID', UNIT_ID)
+        print("ID settings loaded from ini !")
+  except:
+    print("Failed to load ID settings from ini !")
+
+  try:
+    if('CAMERA' in config):
+        CAMERA_ENABLED = config['TIME'].getboolean('CAMERA_ENABLED', fallback=CAMERA_ENABLED)
+        CAM_WIDTH = int(config['TIME'].get('CAM_WIDTH', CAM_WIDTH))
+        CAM_HEIGHT = int(config['TIME'].get('CAM_HEIGHT', CAM_HEIGHT))
+        SCALE_FACTOR = int(config['TIME'].get('SCALE_FACTOR', SCALE_FACTOR))
+        SCALE_PERCENT = int(config['TIME'].get('SCALE_PERCENT', SCALE_PERCENT))
+        THERMAL_CAM = config['TIME'].getboolean('THERMAL_CAM', fallback=THERMAL_CAM)
+        THERMAL_OFFSET_X = int(config['TIME'].get('THERMAL_OFFSET_X', THERMAL_OFFSET_X))
+        THERMAL_OFFSET_Y = int(config['TIME'].get('THERMAL_OFFSET_Y', THERMAL_OFFSET_Y))
+        print("CAMERA settings loaded from ini !")
+  except:
+    print("Failed to load CAMERA settings from ini !")
+
+  try:
+    if('QT' in config):
+        QTCREATOR_FILE = config['QT'].get('QTCREATOR_FILE', QTCREATOR_FILE)
+        print("QT settings loaded from ini !")
+  except:
+    print("Failed to load QT settings from ini !")
+
+  try:
+    if('FACE' in config):
+        FACE_DETECTION_THRESHOLD = int(config['FACE'].get('FACE_DETECTION_THRESHOLD', FACE_DETECTION_THRESHOLD))
+        FACE_DISPLAY = config['FACE'].getboolean('FACE_DISPLAY', fallback=FACE_DISPLAY)
+        THERMAL_DISPLAY = config['FACE'].getboolean('THERMAL_DISPLAY', fallback=THERMAL_DISPLAY)
+        print("FACE settings loaded from ini !")
+  except:
+    print("Failed to load FACE settings from ini !")
+
+except:
+    print("Error loading settings.ini !")
 
 #############
 #GPIO Setup##
@@ -234,6 +311,13 @@ class FACEThread(QThread):
                  self.lepton_error_count = self.lepton_error_count + 1
                  #We reuse the old frame to avoid false detections
                  a = self.old_a
+                 #if( (self.lepton_error_count == 4) or (self.lepton_error_count == 5) ):
+                 #    print("Resetting SPI")
+                 #    subprocess.call(['rmmod', 'spi_bcm2835'])
+                 #    sleep(2)
+                 #    subprocess.call(['modprobe', 'spi_bcm2835'])
+                 #    print("SPI reset")
+                 #    sleep(10)
                  if(self.lepton_error_count > 8):
                      print("Lepton error, disabeling!")
                      thermal_camera_status = "KO"
@@ -675,6 +759,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pushButton_dig_7.clicked.connect(self.on_click_7)
         self.pushButton_dig_8.clicked.connect(self.on_click_8)
         self.pushButton_dig_9.clicked.connect(self.on_click_9)
+        self.code_button.clicked.connect(self.change_tab_code_manual)
 
     #PyQt5 slots
     ##########################################################
@@ -790,6 +875,12 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.timer_cam.stop()
         self.timer_code.start(CODE_TIMEOUT*1000)
 
+    def change_tab_code_manual(self):
+        self.toolBox.setCurrentIndex(1)
+        self.nfc_uid = None
+        self.timer_cam.stop()
+        self.timer_code.start(CODE_TIMEOUT*1000)
+
     #Function to change to the homescreen
     def change_tab_nfc(self):
         self.toolBox.setCurrentIndex(0)
@@ -819,7 +910,10 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if(self.code != ""):
 
             print("Checking code...")
-            self.signal_acces_req_done.emit(self.nfc_uid, self.code, "0", "code")
+            if(self.nfc_uid != None):
+                self.signal_acces_req_done.emit(self.nfc_uid, self.code, "0", "code")
+            else:
+                self.signal_acces_req_done.emit("SKIP", self.code, "0", "code")
             self.code = ""
             self.label_statut_porte.setText("Demande en cours...")
             print("MQTT request signal sent!")
