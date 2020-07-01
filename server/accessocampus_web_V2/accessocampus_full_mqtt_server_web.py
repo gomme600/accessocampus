@@ -46,6 +46,18 @@ FACES_NUMBER = "AUTO"
 #Faces folder name
 FACES_FOLDER = "faces"
 
+#Face names
+#known_face_names = [
+#    "Barack Obama",
+#    "Joe Biden",
+#    "test",
+#    "test2",
+#    "test3",
+#    "test4",
+#]
+
+known_face_names = []
+
 ##########################
 ##----END  SETTINGS----###
 ##########################
@@ -54,18 +66,34 @@ FACES_FOLDER = "faces"
 card_holder_name = "UNKNOWN"
 
 #Autodetection of faces in folder
-if(FACES_NUMBER == "AUTO"):
-    FACES_NUMBER = sum([len(files) for r, d, files in os.walk(FACES_FOLDER + "/")])
-    print("Auto detected " + str(FACES_NUMBER) + " images in faces folder")
+#if(FACES_NUMBER == "AUTO"):
+#    FACES_NUMBER = sum([len(files) for r, d, files in os.walk(FACES_FOLDER + "/")])
+#    print("Auto detected " + str(FACES_NUMBER) + " images in faces folder")
 
 #Faces
 my_face_encoding = []
 
-for x in range(FACES_NUMBER):
-    picture_of_me = face_recognition.load_image_file(FACES_FOLDER + "/" + str(x)+".jpg")
+#for x in range(FACES_NUMBER):
+#    picture_of_me = face_recognition.load_image_file(FACES_FOLDER + "/" + str(x)+".jpg")
+#    my_face_encoding.append(face_recognition.face_encodings(picture_of_me)[0])
+#    print("Loaded face: " + str(x))
+#print("Loaded " + str(x+1) + " faces from database")
+
+users = UID.query.all()
+face_count = 0
+for x in users:
+    head, data = x.image.split(',', 1)
+    file_ext = head.split(';')[0].split('/')[1]
+    plain_data = base64.b64decode(data)
+    with open('tmp.' + file_ext, 'wb') as f:
+        f.write(plain_data)
+    picture_of_me = face_recognition.load_image_file('tmp.'+file_ext)
     my_face_encoding.append(face_recognition.face_encodings(picture_of_me)[0])
-    print("Loaded face: " + str(x))
-print("Loaded " + str(x+1) + " faces from database")
+    known_face_names.append(x.name)
+    face_count = face_count + 1
+    print("Loaded face: " + str(face_count))
+print("Loaded " + str(face_count) + " faces from database")
+FACES_NUMBER = face_count
 
 #Outputs log messages and call-backs in the console
 def on_log(mqttc, obj, level, string):
@@ -126,12 +154,17 @@ def on_message(client, userdata, message):
                   unknown_picture = face_recognition.load_image_file("received_image.jpg")
                   unknown_face_encoding = face_recognition.face_encodings(unknown_picture)[0]
                   # Now we can see the two face encodings are of the same person with `compare_faces`!
-                  for x in range(FACES_NUMBER):
-                      print("checking face: " + str(x))
-                      face_detection_results = face_recognition.compare_faces([my_face_encoding[x]], unknown_face_encoding)
+                  for y in range(FACES_NUMBER):
+                      print("checking face: " + str(y))
+                      face_detection_results = face_recognition.compare_faces([my_face_encoding[y]], unknown_face_encoding)
                       if face_detection_results[0] == True:
-                          print("We got a match on face: " + str(x))
+                          print("We got a match on face: " + str(y))
                           break
+
+                  if True in face_detection_results:
+                      first_match_index = face_detection_results.index(True)
+                      name = known_face_names[first_match_index]
+                      print(name)
 
                   if face_detection_results[0] == True:
                       print("Person in database!")
@@ -211,6 +244,7 @@ def on_message(client, userdata, message):
                             card_holder_name = m.group(1)
                         if("<DOOR " + ID + ">" in str(uidDB[i])):
                             print("UID allowed to access requested door!")
+                            print("Value of i: "+i)
                             card_ok = True
                             break
                         else:
@@ -219,11 +253,18 @@ def on_message(client, userdata, message):
                     print("Did not find UID in database!")
                     return False
                 else:
-                    return True
+                    return i
 
 
               if(auth_type == "cam"):
-                uid_ok = check_uid()
+                uid_test = check_uid
+                print("uid test results: "+str(uid_test))
+                if(uid_test != False):
+                    if(uid_test == first_match_index):
+                        uid_ok = True
+                    else:
+                        uid_ok = False
+
                 if((face_detection_results[0] == True) & (uid_ok == True)):
                   print("Acces Granted via cam no thermal!")
                   state = "Acces Granted via cam no thermal!"
@@ -244,7 +285,12 @@ def on_message(client, userdata, message):
                   print("Signal emitted!")
 
               if((auth_type == "cam+thermal") & (thermal_detected == "True")):
-                uid_ok = check_uid()
+                if(check_uid != False):
+                    if(check_uid == first_match_index):
+                        uid_ok = True
+                    else:
+                        uid_ok = False
+
                 if((face_detection_results[0] == True) & (uid_ok == True)):
                   print("Acces Granted via cam thermal!")
                   state = "Acces Granted via cam thermal!"
