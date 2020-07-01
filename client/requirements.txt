@@ -1,7 +1,10 @@
 lepton==1.0
-numpy==1.18.1
+numpy==1.16.2
 opencv-contrib-python==4.1.0.25
 paho-mqtt==1.5.0
 pkg-resources==0.0.0
 pylepton==0.1.2
 RPi.GPIO==0.7.0
+picamera==1.13
+pigpio==1.44
+
