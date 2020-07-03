@@ -770,9 +770,13 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pushButton_dig_9.clicked.connect(self.on_click_9)
         self.code_button.clicked.connect(self.change_tab_code_manual)
         self.reboot_button.clicked.connect(self.reboot)
+        self.shutdown_button.clicked.connect(self.shutdown)
 
     #PyQt5 slots
     ##########################################################
+
+    def shutdown(self):
+        subprocess.Popen('shutdown')
 
     def reboot(self):
         subprocess.Popen('reboot')
