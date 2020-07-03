@@ -30,7 +30,7 @@ RELAY_PIN = 21
 OPEN_TIME = 5
 
 #Door ID - Type STR (can be anything. Ex: room number)
-UNIT_ID = "92"
+unitID = "92"
 
 #Code entry page timeout in seconds
 CODE_TIMEOUT = 10
@@ -69,10 +69,10 @@ QTCREATOR_FILE  = "GUI.ui"
 FACE_DETECTION_THRESHOLD = 10
 
 #Display rectangle around detected face
-FACE_DISPLAY = False
+FACE_DISPLAY = True
 
 #Display circle around thermal detection zone
-THERMAL_DISPLAY = False
+THERMAL_DISPLAY = True
 
 ##########################
 ##----END  SETTINGS----###
@@ -169,7 +169,7 @@ try:
 
   try:
     if('ID' in config):
-        UNIT_ID = config['ID'].get('UNIT_ID', UNIT_ID)
+        unitID = config['ID'].get('unitID', unitID)
         print("ID settings loaded from ini !")
   except:
     print("Failed to load ID settings from ini !")
@@ -473,6 +473,8 @@ class MQTTThread(QThread):
         print("MQTT timed out!")
         if(self.auth_type == "code"):
             self.signal_local_check.emit(self.uid, self.code)
+        if(self.auth_type == "code_only"):
+            self.signal_local_check.emit(self.uid, self.code)
         if(self.auth_type == "cam"):
             self.signal_code_request.emit(self.uid)
         if(self.auth_type == "cam+thermal"):
@@ -483,6 +485,13 @@ class MQTTThread(QThread):
     def publish(self, uid, code, image, type, thermal_detect=False):
         #Assemble the MQTT parameters based on the authorisation type
         if(type == "code"):
+            self.uid = uid
+            self.auth_type = type
+            self.code = code
+            self.image = 0
+            self.thermal_detect = thermal_detect
+
+        if(type == "code_only"):
             self.uid = uid
             self.auth_type = type
             self.code = code
@@ -509,11 +518,11 @@ class MQTTThread(QThread):
             self.mqtt_status = mqtt_status
             self.nfc_status = nfc_status
 
-        if((type == "code") or (type == "cam") or (type == "cam+thermal")):
+        if((type == "code") or (type == "code_only") or (type == "cam") or (type == "cam+thermal")):
             #We publish the output string
             print("Publishing message to topic", MQTT_request_topic)
             self.seq_id = str(round(time.time()))
-            mqtt_payload = {"unit_id": UNIT_ID, "seq_id": self.seq_id, "auth_type": self.auth_type, "nfc_uid": self.uid, "passcode": self.code, "thermal_detect": self.thermal_detect, "image": self.image}
+            mqtt_payload = {"unitID": unitID, "seq_id": self.seq_id, "auth_type": self.auth_type, "nfc_uid": self.uid, "passcode": self.code, "thermal_detect": self.thermal_detect, "image": self.image}
             self.client.publish(MQTT_request_topic, json.dumps(mqtt_payload)) 
             print("MQTT request sent...")
             #We start waiting for a response
@@ -572,10 +581,10 @@ class MQTTThread(QThread):
         #We load the data from the dictionary using the keys
 
         #We check if the received message is in the correct format
-        if ( ("unit_id" in inData) & ("command" in inData) ):
+        if ( ("unitID" in inData) & ("command" in inData) ):
 
             #We check if the received message is for us
-            if( (str(inData["unit_id"]) == UNIT_ID) | (str(inData["unit_id"]) == "ALL") ):
+            if( (str(inData["unitID"]) == unitID) | (str(inData["unitID"]) == "ALL") ):
 
               #Stop the timeout timer as we received a response (if it was running)
               self.mqtt_waiting_timer.stop()
@@ -913,7 +922,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             if(self.nfc_uid != None):
                 self.signal_acces_req_done.emit(self.nfc_uid, self.code, "0", "code")
             else:
-                self.signal_acces_req_done.emit("SKIP", self.code, "0", "code")
+                self.signal_acces_req_done.emit(self.code, self.code, "0", "code_only")
             self.code = ""
             self.label_statut_porte.setText("Demande en cours...")
             print("MQTT request signal sent!")
@@ -988,7 +997,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     #OTHER
     #Function to check id locally
     def local_check(self, uid, code):
-              ID = UNIT_ID
+              ID = unitID
               print("Checking local database!")
 
               card_ok = False
@@ -1009,7 +1018,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                   print(line)
                   if("---new card---" in line):
                       if(has_cards == True):
-                         if("#unit_id:" + ID + "#" in line):
+                         if("#unitID:" + ID + "#" in line):
                              if("#CARD_UID:" + uid + "#" in line):
                                  if("#PASSCODE:" + code + "#" in line):
                                      card_ok = True
