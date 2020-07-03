@@ -120,8 +120,8 @@
       <rect>
        <x>0</x>
        <y>0</y>
-       <width>801</width>
-       <height>280</height>
+       <width>100</width>
+       <height>30</height>
       </rect>
      </property>
      <attribute name="label">
@@ -271,8 +271,8 @@
       <rect>
        <x>0</x>
        <y>0</y>
-       <width>801</width>
-       <height>280</height>
+       <width>100</width>
+       <height>30</height>
       </rect>
      </property>
      <attribute name="label">
@@ -309,6 +309,19 @@
     </property>
     <property name="text">
      <string>Porte fermée</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="reboot_button">
+    <property name="geometry">
+     <rect>
+      <x>760</x>
+      <y>420</y>
+      <width>41</width>
+      <height>61</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Reboot</string>
     </property>
    </widget>
   </widget>
