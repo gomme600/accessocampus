@@ -769,9 +769,14 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pushButton_dig_8.clicked.connect(self.on_click_8)
         self.pushButton_dig_9.clicked.connect(self.on_click_9)
         self.code_button.clicked.connect(self.change_tab_code_manual)
+        self.reboot_button.clicked.connect(self.reboot)
 
     #PyQt5 slots
     ##########################################################
+
+    def reboot(self):
+        os.system('sudo reboot')
+
     #Face detection
     #Sets a variable to say that we found a face via camera
     def face_found(self):
