@@ -775,7 +775,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     ##########################################################
 
     def reboot(self):
-        os.system('sudo reboot')
+        subprocess.Popen(['shutdown','-h','now'])
 
     #Face detection
     #Sets a variable to say that we found a face via camera
