@@ -10,14 +10,6 @@ from app.email import send_password_reset_email
 import paho.mqtt.client as mqtt #import the mqtt client
 import time #Used for the timing
 import json #Used for converting to and from json strings
-import settings
-import os
-from flask_wtf.file import FileField, FileRequired
-from werkzeug.utils import secure_filename
-import base64
-from PIL import Image
-from io import BytesIO
-import sys
 
 ##########################
 ##----USER SETTINGS----###
@@ -58,73 +50,26 @@ def index():
     form = AddUidForm()
     form2 = RemoveUidForm()
     form3 = CommandForm()
-#    print("Form 1: ")
-#    print(form.validate_on_submit())
-#    print(form.errors)
-#    print("Form 2: ")
-#    print(form2.validate_on_submit())
-#    print(form2.errors)
-#    print("Form 3: ")
-#    print(form3.validate_on_submit())
-#    print(form3.errors)
 
-    if form.validate_on_submit() and form.add_submit.data:
-        print("Form1")
-        if((form.uid_submit.data != None) and (form.door_submit.data != None) and (form.name_submit.data != None) and (form.code_submit.data != None)):
-            f = form.photo.data
-
-            buffer = BytesIO()
-            buffer.seek(0)
-            f.save(buffer)
-
-            #f.save(os.path.join('faces', secure_filename(form.name_submit.data)+'.jpg'))
-            #img = Image.open("faces/"+secure_filename(form.name_submit.data)+'.jpg')
-
-            buffer.seek(0)
-            img = Image.open(buffer)
-            print(sys.getsizeof(buffer))
-            maxsize = (256, 256)
-            img.thumbnail(maxsize)
-
-            #img = img.resize((256, 256))
-            print(sys.getsizeof(buffer))
-            buffer.seek(0)
-            img.save("tmp.jpg", "JPEG", quality=60, optimize=True)
-            #img.save("faces/"+secure_filename(form.name_submit.data)+'.jpg',"JPEG", optimize=True)
-            #with open("faces/"+secure_filename(form.name_submit.data)+'.jpg', "rb") as img_file:
-                #received_image_B64 = base64.b64encode(img_file.read())
-            #os.remove("faces/"+secure_filename(form.name_submit.data)+'.jpg')
-
-            with open("tmp.jpg", "rb") as img_file:
-                received_image_B64 = base64.b64encode(img_file.read())
-            os.remove("tmp.jpg")
-            received_image_B64 = str(received_image_B64)[2:-1]
-            received_image_B64 = "data:image/jpeg;base64," + received_image_B64
-            data = UID(uid=form.uid_submit.data, door=form.door_submit.data, name=form.name_submit.data, image=received_image_B64)
-            data.set_code(form.code_submit.data)
-            db.session.add(data)
-            db.session.commit()
-            flash('Data added!')
-        else:
-            flash('Incomplete form!')
+    
+    
+    if form.validate_on_submit():
+        data = UID(uid=form.uid_submit.data, door=form.door_submit.data, name=form.name_submit.data)
+        data.set_code(form.code_submit.data)
+        db.session.add(data)
+        db.session.commit()
+        flash('Data added!')
         return redirect(url_for('index'))
     
-    if form2.validate_on_submit() and form2.remove_submit.data:
-        print("Form2")
-        if(form2.ID_submit.data != None):
-            to_delete = UID.query.filter_by(name=form2.ID_submit.data).first()
-        else:
-            flash("Please input a name!")
-        if(to_delete != None):
-            db.session.delete(to_delete)
-            db.session.commit()
-            flash('Data removed!')
-        else:
-            flash("Entry doesn't exist!")
+    
+    if form2.validate_on_submit():
+        uid = UID.query.all()
+        db.session.delete(uid[int(form2.ID_submit.data)-1])
+        db.session.commit()
+        flash('Data removed!')
         return redirect(url_for('index'))
     
-    if form3.validate_on_submit() and form3.command_submit.data:
-        print("Form3")
+    if form3.validate_on_submit():
         flash('Command sent!')
 
         #Get command and unit_ID
@@ -133,16 +78,6 @@ def index():
             unit_ID = form3.client_ID_submit.data
         else:
             unit_ID = "ALL"
-
-        if(form3.building_submit.data != ""):
-            building_ID = form3.building_submit.data
-        else:
-            building_ID = "ALL"
-
-        if(form3.room_submit.data != ""):
-            room_ID = form3.room_submit.data
-        else:
-            room_ID = "ALL"
         
         #MQTT address
         broker_address=MQTT_server
@@ -158,8 +93,8 @@ def index():
 
         #Publish
         mqtt_payload = {"unit_id": unit_ID, "command": command}
-        client.publish(building_ID + "/" + room_ID + "/access/command", json.dumps(mqtt_payload))
-        print("Published to: " + building_ID + "/" + room_ID + "/access/command")
+        client.publish(MQTT_auth_topic, json.dumps(mqtt_payload))
+        print("Published!")
                   
         return redirect(url_for('index'))
     
@@ -215,6 +150,7 @@ def logout():
 
 
 @app.route('/register', methods=['GET', 'POST'])
+@login_required
 def register():
     #if current_user.is_authenticated:
     #    return redirect(url_for('index'))

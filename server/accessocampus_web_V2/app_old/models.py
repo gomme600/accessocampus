@@ -96,8 +96,8 @@ class UID(db.Model):
     uid = db.Column(db.String(64), index=True)
     door = db.Column(db.String(64), index=True)
     name = db.Column(db.String(64), index=True)
-    code = db.Column(db.String(128), index=True)
-    image = db.Column(db.String(65535), index=False)
+    code = db.Column(db.String(64), index=True)
+    image = db.Column(db.String(65535), index=True)
 
     def __repr__(self):
         return '<UID {}>'.format(self.uid)+'<DOOR {}>'.format(self.door)+'<NAME {}>'.format(self.name)+'<CODE {}>'.format(self.code)

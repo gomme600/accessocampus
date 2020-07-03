@@ -1,11 +1,9 @@
 from flask_wtf import FlaskForm
-from flask_wtf.file import FileField, FileRequired
-from werkzeug.utils import secure_filename
 from wtforms import StringField, PasswordField, BooleanField, SubmitField, RadioField, \
     TextAreaField
 from wtforms.validators import ValidationError, DataRequired, Email, EqualTo, \
     Length
-from app.models import User, UID
+from app.models import User
 
 
 class LoginForm(FlaskForm):
@@ -67,31 +65,19 @@ class PostForm(FlaskForm):
     submit = SubmitField('Submit')
 
 class CommandForm(FlaskForm):
-    building_submit = StringField('Building name (ex: irit2) - Leave blank for all')
-    room_submit = StringField('Room name (ex: 366) - Leave blank for all')
-    client_ID_submit = StringField('Door/Gate ID (ex: 92) - Leave blank for all')
+    client_ID_submit = StringField('Door/Gate ID (leave blank for all)')
     command = RadioField("", choices=[('force_open', 'Force Open'), ('force_close', 'Force Close'), ('normal', 'Return to normal'), ('status', 'Get status in log')], default='normal')
-    command_submit = SubmitField('SendCommand')
-
-def validate_name(form, field):
-        #print("Checking name: " + UID.query.filter_by(name=field.data).first().name)
-        try:
-            user = UID.query.filter_by(name=field.data).first().name
-            if user is not None:
-                raise ValidationError('Please use a different name.')
-        except:
-            print("Name field empty!")
+    submit = SubmitField('SendCommand')
 
 class AddUidForm(FlaskForm):
     uid_submit = StringField('UID', validators=[DataRequired()])
     door_submit = StringField('Door', validators=[DataRequired()])
-    name_submit = StringField('Name', validators=[DataRequired(), validate_name])
+    name_submit = StringField('Name', validators=[DataRequired()])
     code_submit = PasswordField('Code', validators=[DataRequired()])
-    code_submit_2 = PasswordField('Repeat code', validators=[DataRequired(), EqualTo('code_submit_2')])
-    photo = FileField(validators=[FileRequired()])
-    add_submit = SubmitField('Add')
+    submit = SubmitField('Add')
 
 class RemoveUidForm(FlaskForm):
-    ID_submit = StringField('Name', validators=[DataRequired()])
-    remove_submit = SubmitField('Remove')
+    ID_submit = StringField('User ID', validators=[DataRequired()])
+    submit = SubmitField('Remove')
+
 
