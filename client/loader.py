@@ -776,7 +776,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     ##########################################################
 
     def shutdown(self):
-        subprocess.Popen('shutdown')
+        subprocess.Popen(['shutdown','-h','now'])
 
     def reboot(self):
         subprocess.Popen('reboot')
