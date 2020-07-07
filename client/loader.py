@@ -136,8 +136,9 @@ Ui_MainWindow, QtBaseClass = uic.loadUiType(os.path.join(cur_path, QTCREATOR_FIL
 ##########################
 import configparser
 config = configparser.ConfigParser()
+
 try:
-  config.read('settings.ini')
+  config.read(os.getcwd()+'/settings.ini')
   print("Loaded settings.ini !")
   try:
     if('MQTT' in config):
@@ -147,6 +148,8 @@ try:
         MQTT_auth_topic = config['MQTT'].get('MQTT_auth_topic', MQTT_auth_topic)
         MQTT_request_topic = config['MQTT'].get('MQTT_request_topic', MQTT_request_topic)
         print("MQTT settings loaded from ini !")
+    else:
+        print("No MQTT section in settings file!")
   except:
     print("Failed to load MQTT settings from ini !")
 
@@ -154,6 +157,8 @@ try:
     if('PINS' in config):
         RELAY_PIN = int(config['PINS'].get('RELAY_PIN', RELAY_PIN))
         print("PIN settings loaded from ini !")
+    else:
+        print("No PINS section in settings file!")
   except:
     print("Failed to load PIN settings from ini !")
 
@@ -164,6 +169,8 @@ try:
         MQTT_TIMEOUT = int(config['TIME'].get('MQTT_TIMEOUT', MQTT_TIMEOUT))
         CAMERA_TIMEOUT = int(config['TIME'].get('CAMERA_TIMEOUT', CAMERA_TIMEOUT))
         print("TIME settings loaded from ini !")
+    else:
+        print("No TIME section in settings file!")
   except:
     print("Failed to load TIME settings from ini !")
 
@@ -171,20 +178,24 @@ try:
     if('ID' in config):
         unitID = config['ID'].get('unitID', unitID)
         print("ID settings loaded from ini !")
+    else:
+        print("No ID section in settings file!")
   except:
     print("Failed to load ID settings from ini !")
 
   try:
     if('CAMERA' in config):
-        CAMERA_ENABLED = config['TIME'].getboolean('CAMERA_ENABLED', fallback=CAMERA_ENABLED)
-        CAM_WIDTH = int(config['TIME'].get('CAM_WIDTH', CAM_WIDTH))
-        CAM_HEIGHT = int(config['TIME'].get('CAM_HEIGHT', CAM_HEIGHT))
-        SCALE_FACTOR = int(config['TIME'].get('SCALE_FACTOR', SCALE_FACTOR))
-        SCALE_PERCENT = int(config['TIME'].get('SCALE_PERCENT', SCALE_PERCENT))
-        THERMAL_CAM = config['TIME'].getboolean('THERMAL_CAM', fallback=THERMAL_CAM)
-        THERMAL_OFFSET_X = int(config['TIME'].get('THERMAL_OFFSET_X', THERMAL_OFFSET_X))
-        THERMAL_OFFSET_Y = int(config['TIME'].get('THERMAL_OFFSET_Y', THERMAL_OFFSET_Y))
+        CAMERA_ENABLED = config['CAMERA'].getboolean('CAMERA_ENABLED', fallback=CAMERA_ENABLED)
+        CAM_WIDTH = int(config['CAMERA'].get('CAM_WIDTH', CAM_WIDTH))
+        CAM_HEIGHT = int(config['CAMERA'].get('CAM_HEIGHT', CAM_HEIGHT))
+        SCALE_FACTOR = int(config['CAMERA'].get('SCALE_FACTOR', SCALE_FACTOR))
+        SCALE_PERCENT = int(config['CAMERA'].get('SCALE_PERCENT', SCALE_PERCENT))
+        THERMAL_CAM = config['CAMERA'].getboolean('THERMAL_CAM', fallback=THERMAL_CAM)
+        THERMAL_OFFSET_X = int(config['CAMERA'].get('THERMAL_OFFSET_X', THERMAL_OFFSET_X))
+        THERMAL_OFFSET_Y = int(config['CAMERA'].get('THERMAL_OFFSET_Y', THERMAL_OFFSET_Y))
         print("CAMERA settings loaded from ini !")
+    else:
+        print("No CAMERA section in settings file!")
   except:
     print("Failed to load CAMERA settings from ini !")
 
@@ -192,6 +203,8 @@ try:
     if('QT' in config):
         QTCREATOR_FILE = config['QT'].get('QTCREATOR_FILE', QTCREATOR_FILE)
         print("QT settings loaded from ini !")
+    else:
+        print("No QT section in settings file!")
   except:
     print("Failed to load QT settings from ini !")
 
@@ -201,11 +214,29 @@ try:
         FACE_DISPLAY = config['FACE'].getboolean('FACE_DISPLAY', fallback=FACE_DISPLAY)
         THERMAL_DISPLAY = config['FACE'].getboolean('THERMAL_DISPLAY', fallback=THERMAL_DISPLAY)
         print("FACE settings loaded from ini !")
+    else:
+        print("No FACE section in settings file!")
   except:
     print("Failed to load FACE settings from ini !")
 
 except:
     print("Error loading settings.ini !")
+
+try:
+  config.read('/root/.config/sensocampus/config.ini')
+  print("Loaded config.ini from sensocampus!")
+  try:
+    if('credentials' in config):
+        MQTT_user = config['credentials'].get('login', MQTT_user)
+        MQTT_password = config['credentials'].get('password', MQTT_password)
+        print("MQTT credentials loaded from sensocampus !")
+    else:
+        print("No CREDENTIALS section in config file!")
+  except:
+    print("Failed to load MQTT credentials from sensocampus !")
+
+except:
+    print("Failed to get MQTT login info from sensocampus!")
 
 #############
 #GPIO Setup##
