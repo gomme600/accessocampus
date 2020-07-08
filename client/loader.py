@@ -372,6 +372,8 @@ class FACEThread(QThread):
                      cv2.circle(a, ((maxLoc[0]+THERMAL_OFFSET_X),(maxLoc[1]+THERMAL_OFFSET_Y)), 10, (0, 0, 204), 2)
                  #Resize the thermal image to a better size
                  a = cv2.resize(a, (320, 240))
+         else:
+             thermal_camera_status = "off"
 
          # take video frame
          ok, img = cam.read()
@@ -718,9 +720,13 @@ class NFCThread(QThread):
        #NFC Setup###
        global nfc_status
        nfc_status = "KO"
-       pn532 = Pn532_i2c()
-       pn532.SAMconfigure()
-       nfc_status = "OK"
+       try:
+           pn532 = Pn532_i2c()
+           pn532.SAMconfigure()
+           nfc_status = "OK"
+           print("NFC setup succes!")
+       except:
+           print("NFC setup failed!")
 
        while True:
           # Check if a card is available to read
