@@ -271,15 +271,13 @@ def main():
                 log.debug("initialized module constructor from remote config: " + str(module_constr))
                 modules.append(module_constr)
 
-    sys.exit(0)
-
     #
     # Auto-detection of 'sensors type' modules to load (e.g camera, temperature, luxmeter) ...
     #   ONLY if they are NOT already registered in modules list sent from sensOCampus
     log.info("Starting auto-load of sensors type modules ...");
     #TODO: find a better way to guess 'sensor type' module from modules directory
     #_sensorsModules=[ "Camera", "Temperature", "Luminosity", "Humidity", "CO2" ]
-    _sensorsModules=[ "access" ]
+    _sensorsModules=[]
     _sensorsModules2load=[ mod for mod in _sensorsModules if mod.lower() not in [_mod.__name__.lower() for(_mod,_,_) in modules]]
 
     for mod in _sensorsModules2load:
