@@ -129,6 +129,32 @@ cur_path = os.path.abspath(os.path.dirname(sys.argv[0]))
 
 Ui_MainWindow, QtBaseClass = uic.loadUiType(os.path.join(cur_path, QTCREATOR_FILE))
 
+#######Sensocampus########
+
+sensocampus_conf = False
+
+_path2add='sensocampus'
+if (os.path.exists(_path2add) and not os.path.abspath(_path2add) in sys.path):
+    sys.path.append(os.path.abspath(_path2add))
+
+_path2add='libutils'
+if (os.path.exists(_path2add) and not os.path.abspath(_path2add) in sys.path):
+    sys.path.append(os.path.abspath(_path2add))
+try:
+    import sensocampus
+    from sensocampus import configuration
+    sensocampus_conf = configuration.Configuration()
+
+    MQTT_server = sensocampus_conf._server
+    MQTT_user = sensocampus_conf._login
+    MQTT_password = sensocampus_conf._password
+    MQTT_request_topic = sensocampus_conf._topics[0] + "/access"
+    MQTT_auth_topic = MQTT_request_topic + "/command"
+    sensocampus_conf = True
+    print("MQTT settings loaded from sensocampus directly !")
+except:
+    print("Failed getting data from sensocampus ! We will try and read the config file ...")
+
 ##########################
 
 ##########################
@@ -141,13 +167,15 @@ try:
   config.read(os.getcwd()+'/settings.ini')
   print("Loaded settings.ini !")
   try:
-    if('MQTT' in config):
+    if(('MQTT' in config) and (sensocampus_conf != True)):
         MQTT_server = config['MQTT'].get('MQTT_server', MQTT_server)
         MQTT_user = config['MQTT'].get('MQTT_user', MQTT_user)
         MQTT_password = config['MQTT'].get('MQTT_password', MQTT_password)
         MQTT_auth_topic = config['MQTT'].get('MQTT_auth_topic', MQTT_auth_topic)
         MQTT_request_topic = config['MQTT'].get('MQTT_request_topic', MQTT_request_topic)
         print("MQTT settings loaded from ini !")
+    elif(sensocampus_conf == True):
+        print("We got MQTT info from sensocampus, no need to read ini !")
     else:
         print("No MQTT section in settings file!")
   except:
@@ -222,21 +250,38 @@ try:
 except:
     print("Error loading settings.ini !")
 
-try:
+if(sensocampus_conf != True):
+ try:
   config.read('/root/.config/sensocampus/config.ini')
   print("Loaded config.ini from sensocampus!")
   try:
     if('credentials' in config):
         MQTT_user = config['credentials'].get('login', MQTT_user)
         MQTT_password = config['credentials'].get('password', MQTT_password)
-        print("MQTT credentials loaded from sensocampus !")
+        print("MQTT credentials loaded from sensocampus ini!")
     else:
         print("No CREDENTIALS section in config file!")
   except:
-    print("Failed to load MQTT credentials from sensocampus !")
+    print("Failed to load MQTT credentials from sensocampus ini!")
 
-except:
-    print("Failed to get MQTT login info from sensocampus!")
+  try:
+    if('MQTT' in config):
+        print("Loading JSON ...")
+        MQTT_topics = json.loads(config.get("MQTT", "topics"))
+        print(MQTT_topics)
+        MQTT_request_topic = str(MQTT_topics[0])+"/access"
+        print("MQTT request topic is : "+MQTT_request_topic)
+        if(len(MQTT_topics) > 1):
+            MQTT_broadcast_topic = MQTT_topics[1]
+        MQTT_auth_topic = MQTT_request_topic+"/command"
+        print("MQTT topics loaded from sensocampus ini!")
+    else:
+        print("No MQTT section in config file!")
+  except:
+    print("Failed to load MQTT topics from sensocampus ini!")
+
+ except:
+    print("Failed to get config from sensocampus ini!")
 
 #############
 #GPIO Setup##

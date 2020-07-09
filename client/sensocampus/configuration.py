@@ -199,6 +199,36 @@ class Configuration(object):
             # configparser only want strings :|
             config['credentials']['port'] = str(conf['port'])
 
+        try:
+            self.update()
+        except:
+            log.error("Unable to update !")
+
+        try:
+            log.debug(self._topics)
+            log.debug(self._modules)
+
+            log.debug(type(self._topics))
+            log.debug(type(self._modules))
+
+            log.debug("Making MQTT section in config file ...")
+            config.add_section('MQTT')
+
+            try:
+                config['MQTT']['topics'] = str(json.dumps(self._topics))
+                log.debug("Topics to be saved are : "+str(config['MQTT']['topics']))
+            except:
+              log.error("Unable to process topics for saving ...")
+
+            try:
+                config['MQTT']['modules'] = str(json.dumps(self._modules))
+                log.debug("Modules to be saved are : "+str(config['MQTT']['modules']))
+            except:
+              log.error("Unable to process modules for saving ...")
+
+        except:
+            log.error("Unable to process MQTT stuff for saving ...")
+
         # save CREDENTIALS in config file
         try:
             with open(settings.CONFIG_FILE, 'w') as configfile:
@@ -233,6 +263,7 @@ class Configuration(object):
             log.debug("cur_conf = " + str(conf))
             self._topics = conf['topics']
             self._modules = conf['zones']
+
             # we now have both CREDENTIALS and CONFIG ...
             self._initialized = True
 
