@@ -131,7 +131,8 @@ Ui_MainWindow, QtBaseClass = uic.loadUiType(os.path.join(cur_path, QTCREATOR_FIL
 
 #######Sensocampus########
 
-sensocampus_conf = False
+sensocampus_conf_mqtt = False
+sensocampus_conf_params = False
 
 _path2add='sensocampus'
 if (os.path.exists(_path2add) and not os.path.abspath(_path2add) in sys.path):
@@ -141,19 +142,37 @@ _path2add='libutils'
 if (os.path.exists(_path2add) and not os.path.abspath(_path2add) in sys.path):
     sys.path.append(os.path.abspath(_path2add))
 try:
+  try:
     import sensocampus
     from sensocampus import configuration
     sensocampus_conf = configuration.Configuration()
+  except:
+    print("Failed reading sensocampus config or importing!")
 
+  try:
     MQTT_server = sensocampus_conf._server
     MQTT_user = sensocampus_conf._login
     MQTT_password = sensocampus_conf._password
     MQTT_request_topic = sensocampus_conf._topics[0] + "/access"
     MQTT_auth_topic = MQTT_request_topic + "/command"
-    sensocampus_conf = True
+    sensocampus_conf_mqtt = True
     print("MQTT settings loaded from sensocampus directly !")
+  except:
+    print("Failed getting MQTT data from sensocampus ! We will try and read the config file ...")
+
+  try:
+    tmp = sensocampus_conf._modules[0]['modules'][0]['module']
+    unitID = sensocampus_conf._modules[0]['modules'][0]['unit']
+    RELAY_PIN = sensocampus_conf._modules[0]['modules'][0]['params'][1]['value']
+    #{'module': 'access', 'unit': 'main_door', 'params': [{'param': 'frequency', 'value': 0}, {'param': 'output', 'value': 21}, {'param': 'input', 'value': -1}
+    sensocampus_conf_params = True
+    print("Loaded sensocampus config parameters!")
+  except Exception as e:
+    print(e)
+    print("Failed loading sensocampus config parameters!")
+
 except:
-    print("Failed getting data from sensocampus ! We will try and read the config file ...")
+    print("Failed to load something from sensocampus!")
 
 ##########################
 
@@ -167,14 +186,14 @@ try:
   config.read(os.getcwd()+'/settings.ini')
   print("Loaded settings.ini !")
   try:
-    if(('MQTT' in config) and (sensocampus_conf != True)):
+    if(('MQTT' in config) and (sensocampus_conf_mqtt != True)):
         MQTT_server = config['MQTT'].get('MQTT_server', MQTT_server)
         MQTT_user = config['MQTT'].get('MQTT_user', MQTT_user)
         MQTT_password = config['MQTT'].get('MQTT_password', MQTT_password)
         MQTT_auth_topic = config['MQTT'].get('MQTT_auth_topic', MQTT_auth_topic)
         MQTT_request_topic = config['MQTT'].get('MQTT_request_topic', MQTT_request_topic)
         print("MQTT settings loaded from ini !")
-    elif(sensocampus_conf == True):
+    elif(sensocampus_conf_mqtt == True):
         print("We got MQTT info from sensocampus, no need to read ini !")
     else:
         print("No MQTT section in settings file!")
@@ -182,9 +201,11 @@ try:
     print("Failed to load MQTT settings from ini !")
 
   try:
-    if('PINS' in config):
+    if(('PINS' in config) and (sensocampus_conf_params != True)):
         RELAY_PIN = int(config['PINS'].get('RELAY_PIN', RELAY_PIN))
         print("PIN settings loaded from ini !")
+    elif(sensocampus_conf_params == True):
+        print("Relay pin number already loaded from sensocampus!")
     else:
         print("No PINS section in settings file!")
   except:
@@ -203,9 +224,11 @@ try:
     print("Failed to load TIME settings from ini !")
 
   try:
-    if('ID' in config):
+    if(('ID' in config) and (sensocampus_conf_params != True)):
         unitID = config['ID'].get('unitID', unitID)
         print("ID settings loaded from ini !")
+    elif(sensocampus_conf_params == True):
+        print("ID already loaded from sensocampus!")
     else:
         print("No ID section in settings file!")
   except:
@@ -250,7 +273,7 @@ try:
 except:
     print("Error loading settings.ini !")
 
-if(sensocampus_conf != True):
+if(sensocampus_conf_mqtt != True):
  try:
   config.read('/root/.config/sensocampus/config.ini')
   print("Loaded config.ini from sensocampus!")
