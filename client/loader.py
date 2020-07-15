@@ -559,6 +559,8 @@ class MQTTThread(QThread):
     global camera_status
     global mqtt_status
     global nfc_status
+    global sensocampus_conf_mqtt
+    global sensocampus_conf_params
 
     def __init__(self):
         QThread.__init__(self)
@@ -618,6 +620,16 @@ class MQTTThread(QThread):
             self.camera_status = camera_status
             self.mqtt_status = mqtt_status
             self.nfc_status = nfc_status
+            if(sensocampus_conf_mqtt == False):
+                self.senso_mqtt = "Failed!"
+            else:
+                self.senso_mqtt = "OK!"
+
+            if(sensocampus_conf_params == False):
+                self.senso_params = "Failed!"
+            else:
+                self.senso_params = "OK!"
+
 
         if((type == "code") or (type == "code_only") or (type == "cam") or (type == "cam+thermal")):
             #We publish the output string
@@ -634,7 +646,7 @@ class MQTTThread(QThread):
         if(type == "status"):
             #We publish the output string
             print("Publishing message to topic", MQTT_request_topic)
-            mqtt_payload = {"mqtt_status": self.mqtt_status, "nfc_status": self.nfc_status, "camera_status": self.camera_status, "thermal_status": self.thermal_status}
+            mqtt_payload = {"mqtt_status": self.mqtt_status, "nfc_status": self.nfc_status, "camera_status": self.camera_status, "thermal_status": self.thermal_status, "senso_mqtt_status": self.senso_mqtt, "senso_params_status": self.senso_params}
             self.client.publish(MQTT_request_topic, json.dumps(mqtt_payload))
             print("MQTT request sent...")
 
