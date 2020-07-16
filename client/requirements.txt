@@ -7,4 +7,6 @@ paho-mqtt==1.5.0
 RPi.GPIO==0.7.0
 picamera==1.13
 pigpio==1.44
-
+requests
+validictory
+appdirs
