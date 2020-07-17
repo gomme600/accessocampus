@@ -146,7 +146,8 @@ try:
     import sensocampus
     from sensocampus import configuration
     sensocampus_conf = configuration.Configuration()
-  except:
+  except Exception as e:
+    print(e)
     print("Failed reading sensocampus config or importing!")
 
   try:
