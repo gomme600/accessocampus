@@ -15,7 +15,7 @@ RUN echo "#!/bin/bash" > /etc/X11/xinit/xserverrc \
   && echo 'exec /usr/bin/X -s 0 dpms -nolisten tcp "$@"' >> /etc/X11/xinit/xserverrc
 
 # Setting working directory
-WORKDIR /usr/src/app
+WORKDIR /usr/src/app/accessocampus/client
 
 COPY start.sh start.sh
 
@@ -44,7 +44,7 @@ WORKDIR /usr/src/app/accessocampus/client
 
 RUN mv pylepton pylepton_install
 
-WORKDIR /usr/src/app
+WORKDIR /usr/src/app/accessocampus/client
 
 # Adding things to autostart will cause them to be launchd automatically on starup
 # COPY autostart /etc/xdg/lxsession/LXDE-pi/autostart
