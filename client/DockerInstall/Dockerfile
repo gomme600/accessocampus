@@ -1,9 +1,7 @@
 FROM balenalib/raspberrypi3:buster
 
 # Install desktop environment
-RUN apt-get -y update
-
-RUN apt-get -y install xserver-xorg-core \
+RUN install_packages xserver-xorg-core \
     xinit lxsession desktop-file-utils \
     raspberrypi-ui-mods rpd-icons \
     gtk2-engines-clearlookspix \
@@ -19,10 +17,10 @@ RUN echo "#!/bin/bash" > /etc/X11/xinit/xserverrc \
 # Setting working directory
 WORKDIR /usr/src/app
 
-RUN apt-get -y install git \
+RUN install_packages git \
     python3-pip libatlas-base-dev libhdf5-dev \
     libhdf5-serial-dev libatlas-base-dev \
-    libqtgui4 libqt4-test \
+    libjasper-dev libqtgui4 libqt4-test \
     python3-pyqt5 apt-utils python3-setuptools \
     v4l-utils python-opencv python-numpy
 
