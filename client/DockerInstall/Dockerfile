@@ -22,7 +22,7 @@ WORKDIR /usr/src/app
 RUN apt-get -y install git \
     python3-pip libatlas-base-dev libhdf5-dev \
     libhdf5-serial-dev libatlas-base-dev \
-    libjasper-dev libqtgui4 libqt4-test \
+    libqtgui4 libqt4-test \
     python3-pyqt5 apt-utils python3-setuptools \
     v4l-utils python-opencv python-numpy
 
