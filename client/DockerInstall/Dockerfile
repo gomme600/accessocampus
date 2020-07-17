@@ -15,11 +15,7 @@ RUN echo "#!/bin/bash" > /etc/X11/xinit/xserverrc \
   && echo 'exec /usr/bin/X -s 0 dpms -nolisten tcp "$@"' >> /etc/X11/xinit/xserverrc
 
 # Setting working directory
-WORKDIR /usr/src/app/accessocampus/client
-
-COPY start.sh start.sh
-
-RUN chmod +x start.sh
+WORKDIR /usr/src/app
 
 RUN install_packages git \
     python3-pip libatlas-base-dev libhdf5-dev \
@@ -31,6 +27,10 @@ RUN install_packages git \
 RUN git clone https://github.com/gomme600/accessocampus.git
 
 WORKDIR /usr/src/app/accessocampus/client
+
+COPY start.sh start.sh
+
+RUN chmod +x start.sh
 
 RUN pip3 install -r requirements.txt
 
