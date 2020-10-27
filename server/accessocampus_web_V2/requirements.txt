@@ -1,4 +1,4 @@
-cryptography==2.6.1
+cryptography==3.2
 face-recognition==1.2.3
 face-recognition-models==0.3.0
 Flask==1.1.1

@@ -2,7 +2,7 @@ alembic==1.4.1
 asn1crypto==0.24.0
 blinker==1.4
 Click==7.0
-cryptography==2.6.1
+cryptography==3.2
 dlib==19.19.0
 dominate==2.4.0
 entrypoints==0.3
