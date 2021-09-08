@@ -64,7 +64,7 @@ pifacecommon==4.2.2
 pifacedigitalio==3.0.5
 piglow==1.2.5
 pigpio==1.44
-Pillow==5.4.1
+Pillow==8.3.2
 psutil==5.5.1
 pycrypto==2.6.1
 pyftdi==0.42.2
