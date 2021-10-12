@@ -1,4 +1,4 @@
 numpy==1.18.1
-opencv-contrib-python==4.1.0.25
+opencv-contrib-python==4.2.0.32
 paho-mqtt==1.5.0
 pkg-resources==0.0.0
