@@ -1,6 +1,6 @@
 # requirements for the server
 alembic==0.9.6
-Babel==2.5.1
+Babel==2.9.1
 blinker==1.4
 face-recognition==1.2.3
 face-recognition-models==0.3.0
