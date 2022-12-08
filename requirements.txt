@@ -7,7 +7,7 @@ face-recognition-models==0.3.0
 numpy==1.18.1; platform_machine == 'x86_64'
 numpy==1.18.1; platform_machine == 'x86'
 paho-mqtt==1.5.0
-certifi==2017.7.27.1
+certifi==2022.12.7
 chardet==3.0.4
 click==6.7
 dominate==2.3.1
